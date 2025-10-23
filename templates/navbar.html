@@ -1,0 +1,24 @@
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="{{ url_for('index') }}">ASİS</a>
+        <div class="collapse navbar-collapse">
+            <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                <li class="nav-item">
+                    <a class="nav-link {% if request.path == url_for('index') %}active{% endif %}" href="{{ url_for('index') }}"><i class="fas fa-car"></i> İzləmə Sistemi</a>
+                </li>
+                {% if session.get('role') == 'admin' %}
+                    <li class="nav-item">
+                        <a class="nav-link {% if 'admin/drivers' in request.path %}active{% endif %}" href="{{ url_for('admin_drivers') }}"><i class="fas fa-users"></i> Sürücülər</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if 'admin/cars' in request.path %}active{% endif %}" href="{{ url_for('admin_cars') }}"><i class="fas fa-car-side"></i> Avtomobillər</a>
+                    </li>
+                {% endif %}
+            </ul>
+            <span class="navbar-text me-3">
+                <strong>{{ session['user'] }}</strong> (Rol: <strong>{{ session['role']|capitalize }}</strong>)
+            </span>
+            <a href="{{ url_for('logout') }}" class="btn btn-outline-danger"><i class="fas fa-sign-out-alt"></i> Çıxış</a>
+        </div>
+    </div>
+</nav>
