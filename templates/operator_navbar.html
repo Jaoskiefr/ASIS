@@ -10,52 +10,41 @@
 
     <div class="collapse navbar-collapse" id="asisNavbar">
       <ul class="navbar-nav me-auto mb-2 mb-lg-0">
-        <!-- Esas Səhifə -->
         <li class="nav-item">
           <a class="nav-link {% if request.path == url_for('index') %}active{% endif %}" href="{{ url_for('index') }}">
             <i class="fas fa-home me-1"></i> Əsas Səhifə
           </a>
         </li>
 
-        {% if session.get('role') in ['user','admin'] %}
-        <!-- Sürücülər -->
         <li class="nav-item">
           <a class="nav-link {% if request.path.startswith(url_for('admin_drivers')) %}active{% endif %}" href="{{ url_for('admin_drivers') }}">
             <i class="fas fa-id-card me-1"></i> Sürücülər
           </a>
         </li>
 
-        <!-- Avtomobillər -->
         <li class="nav-item">
           <a class="nav-link {% if request.path.startswith(url_for('admin_cars')) %}active{% endif %}" href="{{ url_for('admin_cars') }}">
             <i class="fas fa-car me-1"></i> Avtomobillər
           </a>
         </li>
 
-        <!-- YENİ: Köməkçilər -->
         <li class="nav-item">
           <a class="nav-link {% if request.path.startswith(url_for('admin_assistants')) %}active{% endif %}" href="{{ url_for('admin_assistants') }}">
             <i class="fas fa-user-friends me-1"></i> Köməkçilər
           </a>
         </li>
 
-        <!-- YENİ: Planlamaçılar -->
         <li class="nav-item">
           <a class="nav-link {% if request.path.startswith(url_for('admin_planners')) %}active{% endif %}" href="{{ url_for('admin_planners') }}">
             <i class="fas fa-user-tie me-1"></i> Planlamaçılar
           </a>
         </li>
-        {% endif %}
-
-        {% if session.get('role') == 'admin' %}
-        <!-- (İstəsən buraya Admin menyuları da əlavə edə bilərik) -->
-        {% endif %}
       </ul>
 
       <div class="d-flex align-items-center gap-2">
         {% if session.get('fullname') %}
           <span class="navbar-text text-white-50">
-            {{ session['fullname'] }} (Rol: {{ 'Admin' if session.get('role')=='admin' else 'User' }})
+            {{ session['fullname'] }} (Rol: <span class="text-success">Operator</span>)
           </span>
           <a class="btn btn-sm btn-outline-danger" href="{{ url_for('logout') }}">
             <i class="fas fa-sign-out-alt me-1"></i> Çıxış

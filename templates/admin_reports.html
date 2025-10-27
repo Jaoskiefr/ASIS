@@ -13,10 +13,12 @@
         .content-container {
             background-color: rgba(255, 255, 255, 0.95); border-radius: 8px; padding: 20px; margin-top: 20px; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
         }
+        /* Cədvəl üçün kiçik şrift */
+        .table th, .table td { font-size: 0.9rem; }
     </style>
 </head>
 <body>
-    {% include 'navbar.html' %} 
+    {% include 'admin_navbar.html' %} 
     
     <div class="container-fluid mt-4 content-container">
         
@@ -43,7 +45,7 @@
                     <div class="row align-items-end">
                         <div class="col-md-3 mb-3">
                             <label class="form-label">Avtomobilə görə</label>
-                            <select class="form-select" name="car_id">
+                            <select class="form-select form-select-sm" name="car_id">
                                 <option value="">Bütün Avtomobillər</option>
                                 {% for car in cars %}
                                     <option value="{{ car.id }}" {% if selected_filters.car_id == car.id %}selected{% endif %}>
@@ -53,8 +55,8 @@
                             </select>
                         </div>
                         <div class="col-md-3 mb-3">
-                            <label class="form-label">Sürücüyə görə</label>
-                            <select class="form-select" name="driver_id">
+                            <label class="form-label">Sürücüyə görə (Xərc anında)</label>
+                            <select class="form-select form-select-sm" name="driver_id">
                                 <option value="">Bütün Sürücülər</option>
                                 {% for driver in drivers %}
                                     <option value="{{ driver.id }}" {% if selected_filters.driver_id == driver.id %}selected{% endif %}>
@@ -64,8 +66,29 @@
                             </select>
                         </div>
                         <div class="col-md-3 mb-3">
+                            <label class="form-label">Köməkçiyə görə (Xərc anında)</label> <select class="form-select form-select-sm" name="assistant_id">
+                                <option value="">Bütün Köməkçilər</option>
+                                {% for assistant in assistants %}
+                                    <option value="{{ assistant.id }}" {% if selected_filters.assistant_id == assistant.id %}selected{% endif %}>
+                                        {{ assistant.name }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <label class="form-label">Planlamaçıya görə (Xərc anında)</label> <select class="form-select form-select-sm" name="planner_id">
+                                <option value="">Bütün Planlamaçılar</option>
+                                {% for planner in planners %}
+                                    <option value="{{ planner.id }}" {% if selected_filters.planner_id == planner.id %}selected{% endif %}>
+                                        {{ planner.name }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="col-md-3 mb-3">
                             <label class="form-label">Operatora görə</label>
-                            <select class="form-select" name="user_username">
+                            <select class="form-select form-select-sm" name="user_username">
                                 <option value="">Bütün Operatorlar</option>
                                 {% for op in operators %}
                                     <option value="{{ op.username }}" {% if selected_filters.user_username == op.username %}selected{% endif %}>
@@ -74,35 +97,30 @@
                                 {% endfor %}
                             </select>
                         </div>
-                        
-                        <div class="col-md-3 mb-3"></div> <div class="col-md-3 mb-3">
+                        <div class="col-md-3 mb-3">
                             <label class="form-label">Başlanğıc Tarixi</label>
-                            <input type="date" class="form-control" name="start_date" value="{{ selected_filters.start_date or '' }}">
+                            <input type="date" class="form-control form-control-sm" name="start_date" value="{{ selected_filters.start_date or '' }}">
                         </div>
                         <div class="col-md-3 mb-3">
                             <label class="form-label">Bitmə Tarixi</label>
-                            <input type="date" class="form-control" name="end_date" value="{{ selected_filters.end_date or '' }}">
+                            <input type="date" class="form-control form-control-sm" name="end_date" value="{{ selected_filters.end_date or '' }}">
                         </div>
-                        
-                        <div class="col-md-6 mb-3 d-flex justify-content-end gap-2">
-                            <a href="{{ url_for('admin_reports') }}" class="btn btn-secondary"><i class="fas fa-times"></i> Filtrləri Təmizlə</a>
-                            <button type="submit" class="btn btn-primary"><i class="fas fa-search"></i> Axtar</button>
+                        <div class="col-md-3 mb-3 d-flex justify-content-end gap-2">
+                            <a href="{{ url_for('admin_reports') }}" class="btn btn-sm btn-secondary"><i class="fas fa-times"></i> Təmizlə</a>
+                            <button type="submit" class="btn btn-sm btn-primary"><i class="fas fa-search"></i> Axtar</button>
                         </div>
                     </div>
                 </form>
             </div>
         </div>
-
         <h2 class="mt-5">Nəticələr ({{ reports|length }} qeyd tapıldı)</h2>
         <div class="table-responsive">
-            <table class="table table-striped table-bordered table-hover">
-                <thead class="bg-dark text-white">
+            <table class="table table-striped table-bordered table-hover table-sm"> <thead class="bg-dark text-white">
                     <tr>
                         <th>Tarix / Saat</th>
                         <th>Operator</th>
                         <th>Avtomobil</th>
-                        <th>Sürücü</th>
-                        <th>Növ</th>
+                        <th>Sürücü (Xərc anında)</th>      <th>Köməkçi (Xərc anında)</th>    <th>Planlamaçı (Xərc anında)</th> <th>Növ</th>
                         <th class="text-end">Məbləğ (AZN)</th>
                         <th class="text-end">Litr</th>
                         <th>Açıqlama</th>
@@ -111,8 +129,7 @@
                 <tbody>
                     {% if not reports %}
                     <tr>
-                        <td colspan="8" class="text-center text-muted">Axtarışa uyğun nəticə tapılmadı.</td>
-                    </tr>
+                        <td colspan="10" class="text-center text-muted">Axtarışa uyğun nəticə tapılmadı.</td> </tr>
                     {% endif %}
                     
                     {% for item in reports %}
@@ -120,25 +137,12 @@
                         <td>{{ item.expense.timestamp.strftime('%d.%m.%Y %H:%M') }}</td>
                         <td>{{ item.user.fullname if item.user else item.expense.entered_by }}</td>
                         <td>
-                            {% if item.car %}
-                                <span class="badge bg-dark">{{ item.car.car_number }}</span>
-                            {% else %}
-                                <span class="badge bg-secondary">Bilinmir</span>
-                            {% endif %}
+                            {% if item.car %}<span class="badge bg-dark">{{ item.car.car_number }}</span>
+                            {% else %}<span class="badge bg-secondary">Bilinmir</span>{% endif %}
                         </td>
-                        <td>
-                            {% if item.driver %}
-                                {{ item.driver.name }}
-                            {% else %}
-                                <span class="text-muted">Təyin olunmayıb</span>
-                            {% endif %}
-                        </td>
-                        <td>
-                            {% if item.expense.type == 'Yanacaq' %}
-                                <span class="badge bg-success">Yanacaq</span>
-                            {% else %}
-                                <span class="badge bg-info">Xərc</span>
-                            {% endif %}
+                        <td>{{ item.driver_name_at_expense }}</td>      <td>{{ item.assistant_name_at_expense }}</td>    <td>{{ item.planner_name_at_expense }}</td>    <td>
+                            {% if item.expense.type == 'Yanacaq' %}<span class="badge bg-success">Yanacaq</span>
+                            {% else %}<span class="badge bg-info">Xərc</span>{% endif %}
                         </td>
                         <td class="text-end text-danger fw-bold">{{ "%.2f"|format(item.expense.amount) }}</td>
                         <td class="text-end">{{ item.expense.litr if item.expense.litr > 0 else '-' }}</td>
@@ -148,14 +152,12 @@
                 </tbody>
                 <tfoot>
                     <tr class="bg-light fw-bold">
-                        <td colspan="5" class="text-end">Yekun Cəm:</td>
-                        <td class="text-end text-danger fs-5">{{ "%.2f"|format(total_amount) }} AZN</td>
-                        <td colspan="2"></td>
-                    </tr>
+                        <td colspan="7" class="text-end">Yekun Cəm:</td> <td class="text-end text-danger fs-5">{{ "%.2f"|format(total_amount) }} AZN</td>
+                        <td colspan="2"></td> </tr>
                 </tfoot>
             </table>
         </div>
-    </div>
+        </div>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
