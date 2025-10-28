@@ -29,18 +29,16 @@
             <div class="card-body">
                 <form method="POST" action="{{ url_for('edit_driver', id=driver.id) }}">
                     <div class="row">
-                        <div class="col-md-4 mb-3">
-                            <label class="form-label">Ad, Soyad, Ata Adı</label>
+                        <div class="col-md-3 mb-3"> <label class="form-label">Ad, Soyad, Ata Adı</label>
                             <input type="text" class="form-control" name="name" value="{{ driver.name }}" required>
                         </div>
-                        <div class="col-md-4 mb-3">
-                            <label class="form-label">Sürücülük Vəsiqəsi No</label>
-                            <input type="text" class="form-control" name="license_no" value="{{ driver.license_no }}" required>
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            <label class="form-label">Telefon Nömrəsi</label>
-                            <input type="tel" class="form-control" name="phone" value="{{ driver.phone }}">
-                        </div>
+                        <div class="col-md-3 mb-3"> <label class="form-label">Sürücülük Vəsiqəsi No</label>
+                            <input type="text" class="form-control" name="license_no" value="{{ driver.license_no or '' }}"> </div>
+                        <div class="col-md-3 mb-3"> <label class="form-label">Telefon Nömrəsi</label>
+                            <input type="tel" class="form-control" name="phone" value="{{ driver.phone or '' }}"> </div>
+                        <div class="col-md-3 mb-3"> 
+                            <label class="form-label">İşə Başlama Tarixi</label>
+                            <input type="date" class="form-control" name="start_date" value="{{ driver.start_date or '' }}"> </div>
                     </div>
                     <button type="submit" class="btn btn-warning"><i class="fas fa-save"></i> Dəyişikliyi Yadda Saxla</button>
                     <a href="{{ url_for('admin_drivers') }}" class="btn btn-secondary">Ləğv Et</a>

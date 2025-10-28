@@ -73,10 +73,11 @@
                         <i class="fas fa-chart-line me-2"></i> <strong>Bu Ayın Xərcləri</strong> 
                         (Ümumi: <span class="text-danger fw-bold">{{ "%.2f"|format(stats.monthly_total) }} AZN</span>)
                     </div>
-                    <div class="card-body" style="min-height: 350px; position: relative;"> {% if chart_data.data and chart_data.data|sum > 0 %}
+                    <div class="card-body" style="min-height: 350px; position: relative;"> 
+                        {% if chart_data.data and chart_data.data|sum > 0 %}
                             <canvas id="expenseDoughnutChart"></canvas>
                         {% else %}
-                            <div class="alert alert-info text-center h-100 d-flex align-items-center justify-content-center"> Bu ay üçün heç bir operator xərci qeydə alınmayıb. </div>
+                            <div class="alert alert-info text-center h-100 d-flex align-items-center justify-content-center"> Bu ay üçün heç bir xərc qeydə alınmayıb. </div>
                         {% endif %}
                     </div>
                 </div>
@@ -100,30 +101,72 @@
                 </div>
                 
                 <div class="stat-card bg-card-assistants">
-                    <div class="stat-icon"><i class="fas fa-user-friends"></i></div> <div class="stat-value">{{ stats.assistant_count }}</div>      <div class="stat-label">Ümumi Köməkçi Sayı</div>
+                    <div class="stat-icon"><i class="fas fa-user-friends"></i></div> 
+                    <div class="stat-value">{{ stats.assistant_count }}</div>      
+                    <div class="stat-label">Ümumi Köməkçi Sayı</div>
                 </div>
                 <div class="stat-card bg-card-planners">
-                    <div class="stat-icon"><i class="fas fa-user-tie"></i></div>      <div class="stat-value">{{ stats.planner_count }}</div>          <div class="stat-label">Ümumi Planlamaçı Sayı</div>
-                </div>
+                    <div class="stat-icon"><i class="fas fa-user-tie"></i></div>      
+                    <div class="stat-value">{{ stats.planner_count }}</div>          
+                    <div class="stat-label">Ümumi Planlamaçı Sayı</div>
                 </div>
             </div>
+        </div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    
     <script>
         const doughnutChartCanvas = document.getElementById('expenseDoughnutChart');
         if (doughnutChartCanvas) {
             const chartLabels = {{ chart_data.labels | tojson }};
             const chartDataValues = {{ chart_data.data | tojson }};
+            
+            // Yeni rəng palitrası (kifayət qədər rəng əlavə et)
+            const backgroundColors = [
+                'rgba(25, 135, 84, 0.7)',  // Yaşıl (Yanacaq?)
+                'rgba(255, 193, 7, 0.7)',   // Sarı (Təmir?)
+                'rgba(220, 53, 69, 0.7)',   // Qırmızı (Cərimə?)
+                'rgba(13, 202, 240, 0.7)',  // Açıq Mavi (Avtoyuma?)
+                'rgba(13, 110, 253, 0.7)',  // Göy (Yemək?)
+                'rgba(108, 117, 125, 0.7)', // Boz (Digər?)
+                'rgba(255, 159, 64, 0.7)',  // Narıncı
+                'rgba(153, 102, 255, 0.7)', // Bənövşəyi
+            ];
+            
+            // Əgər data varsa və cəmi sıfırdan böyükdürsə diaqramı çək
             if (chartDataValues && chartDataValues.length > 0 && chartDataValues.reduce((a, b) => a + b, 0) > 0) {
                 const ctx = doughnutChartCanvas.getContext('2d');
                 new Chart(ctx, {
-                    type: 'doughnut', data: { labels: chartLabels, datasets: [{
-                            label: 'Xərc Məbləği (AZN)', data: chartDataValues,
-                            backgroundColor: ['rgba(25, 135, 84, 0.7)', 'rgba(0, 123, 255, 0.7)', 'rgba(255, 193, 7, 0.7)', 'rgba(220, 53, 69, 0.7)'],
-                            borderColor: '#fff', borderWidth: 2, hoverOffset: 4 }] },
-                    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' },
-                            tooltip: { callbacks: { label: function(context) { let label = context.label || ''; let value = context.raw || 0; return label + ': ' + value.toFixed(2) + ' AZN'; } } } } }
+                    type: 'doughnut', 
+                    data: { 
+                        labels: chartLabels, 
+                        datasets: [{
+                            label: 'Xərc Məbləği (AZN)', 
+                            data: chartDataValues,
+                            // Dinamik olaraq lazım olan qədər rəng seç
+                            backgroundColor: backgroundColors.slice(0, chartLabels.length), 
+                            borderColor: '#fff', 
+                            borderWidth: 2, 
+                            hoverOffset: 4 
+                        }] 
+                    },
+                    options: { 
+                        responsive: true, 
+                        maintainAspectRatio: false, 
+                        plugins: { 
+                            legend: { position: 'bottom' },
+                            tooltip: { 
+                                callbacks: { 
+                                    label: function(context) { 
+                                        let label = context.label || ''; 
+                                        let value = context.raw || 0; 
+                                        return label + ': ' + value.toFixed(2) + ' AZN'; 
+                                    } 
+                                } 
+                            } 
+                        } 
+                    }
                 });
             }
         }

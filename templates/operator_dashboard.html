@@ -171,7 +171,11 @@
                                                         <td>{{ expense.timestamp_str }}</td>
                                                         <td>
                                                             {% if expense.type == 'Yanacaq' %}<span class="badge bg-success">Yanacaq</span>
-                                                            {% else %}<span class="badge bg-info">Xərc</span>{% endif %}
+                                                            {% elif expense.type == 'Təmir' %}<span class="badge bg-warning text-dark">Təmir</span>
+                                                            {% elif expense.type == 'Cərimə' %}<span class="badge bg-danger">Cərimə</span>
+                                                            {% elif expense.type == 'Avtoyuma' %}<span class="badge bg-info">Avtoyuma</span>
+                                                            {% elif expense.type == 'Yemək' %}<span class="badge bg-primary">Yemək</span>
+                                                            {% else %}<span class="badge bg-secondary">{{ expense.type }}</span>{% endif %}
                                                         </td>
                                                         <td class="text-end text-danger fw-bold">{{ "%.2f"|format(expense.amount) }}</td>
                                                         <td class="text-end">{{ expense.litr if expense.litr > 0 else '-' }}</td>
@@ -204,33 +208,45 @@
         <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header bg-success text-white">
-                    <h5 class="modal-title" id="expenseModalLabel"><i class="fas fa-gas-pump"></i> Yanacaq və ya Xərc Qeydiyyatı</h5>
+                    <h5 class="modal-title" id="expenseModalLabel"><i class="fas fa-plus-circle"></i> Xərc Qeydiyyatı</h5>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
                     <form id="expenseForm" method="POST" action="{{ url_for('add_expense') }}">
                         <p class="text-muted">Seçilmiş Avtomobil: <strong id="modalCarNumber"></strong></p>
+                        
                         <div class="mb-3">
-                            <label class="form-label">Əməliyyat Növü</label>
-                            <div class="d-flex gap-4">
-                                <div class="form-check">
-                                    <input class="form-check-input" type="radio" name="expense_type" id="typeBenzin" value="Yanacaq" checked>
-                                    <label class="form-check-label" for="typeBenzin">Yanacaq</label>
-                                </div>
-                                <div class="form-check">
-                                    <input class="form-check-input" type="radio" name="expense_type" id="typeXerc" value="Xərc">
-                                    <label class="form-check-label" for="typeXerc">Digər Xərc</label>
-                                </div>
-                            </div>
+                            <label for="expenseType" class="form-label">Xərc Növü</label>
+                            <select class="form-select" id="expenseType" name="expense_type" required>
+                                <option value="" disabled selected>-- Növü seçin --</option>
+                                <option value="Yanacaq">Yanacaq</option>
+                                <option value="Təmir">Təmir</option>
+                                <option value="Cərimə">Cərimə</option>
+                                <option value="Avtoyuma">Avtoyuma</option>
+                                <option value="Yemək">Yemək</option>
+                                <option value="Digər">Digər</option>
+                            </select>
                         </div>
+                        
+                        <div class="mb-3" id="fuelTypeGroup" style="display: none;">
+                            <label for="fuelSubType" class="form-label">Yanacaq Növü</label>
+                            <select class="form-select" id="fuelSubType" name="fuel_subtype">
+                                <option value="Dizel">Dizel</option>
+                                <option value="AI-92">AI-92</option>
+                                <option value="AI-95">AI-95</option>
+                            </select>
+                        </div>
+                        
                         <div class="mb-3">
                             <label for="amount" class="form-label" id="amountLabel">Məbləğ (AZN)</label>
                             <input type="number" step="0.01" class="form-control" id="amount" name="amount" required>
                         </div>
-                        <div class="mb-3" id="litrGroup">
+                        
+                        <div class="mb-3" id="litrGroup" style="display: none;">
                             <label class="form-label">Litr</label>
                             <input type="number" step="0.01" class="form-control" id="litr" name="litr">
                         </div>
+                        
                         <div class="mb-3">
                             <label for="description" class="form-label">Açıqlama / Qeyd</label>
                             <textarea class="form-control" id="description" name="description" rows="3" required></textarea>
@@ -245,7 +261,6 @@
             </div>
         </div>
     </div>
-
     <div class="modal fade" id="carMetaModal" tabindex="-1" aria-labelledby="carMetaModalLabel" aria-hidden="true">
         <div class="modal-dialog">
             <div class="modal-content">
@@ -314,10 +329,40 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            // Xərc modalı
+            
             const expenseModal = document.getElementById('expenseModal');
+            const expenseTypeSelect = document.getElementById('expenseType');
+            const fuelTypeGroup = document.getElementById('fuelTypeGroup');
+            const fuelSubTypeSelect = document.getElementById('fuelSubType');
+            const litrGroup = document.getElementById('litrGroup');
+
+            // --- YENİ XƏRC NÖVÜ MƏNTİQİ ---
+            if (expenseTypeSelect) {
+                expenseTypeSelect.addEventListener('change', function() {
+                    const selectedType = this.value;
+                    
+                    if (selectedType === 'Yanacaq') {
+                        // Yanacaq seçilibsə, həm yanacaq növünü, həm də litri göstər
+                        fuelTypeGroup.style.display = 'block';
+                        fuelSubTypeSelect.setAttribute('required', 'required'); // Yanacaq növü məcburidir
+                        
+                        litrGroup.style.display = 'block';
+                        // litrGroup.querySelector('#litr').setAttribute('required', 'required'); // Litr məcburi deyil
+                    } else {
+                        // Başqa bir şey seçilibsə, hər ikisini gizlət
+                        fuelTypeGroup.style.display = 'none';
+                        fuelSubTypeSelect.removeAttribute('required'); // Artıq məcburi deyil
+                        
+                        litrGroup.style.display = 'none';
+                        // litrGroup.querySelector('#litr').removeAttribute('required');
+                    }
+                });
+            }
+
+            // Xərc modalı açılarkən məlumatları ötür və formu sıfırla
             if (expenseModal) {
                 expenseModal.addEventListener('show.bs.modal', function (event) {
                     event.stopPropagation(); 
@@ -326,26 +371,16 @@
                     const carNumber = button.getAttribute('data-bs-car-number');
                     expenseModal.querySelector('#modalCarNumber').textContent = carNumber;
                     expenseModal.querySelector('#modalCarId').value = carId;
+
+                    // Formu sıfırla (əvvəlki seçimlər qalmasın)
+                    document.getElementById('expenseForm').reset();
+                    fuelTypeGroup.style.display = 'none';
+                    fuelSubTypeSelect.removeAttribute('required');
+                    litrGroup.style.display = 'none';
                 });
             }
-
-            // Yanacaq seçimi üçün litr sahəsi
-            const typeBenzin = document.getElementById('typeBenzin');
-            const typeXerc = document.getElementById('typeXerc');
-            const litrGroup = document.getElementById('litrGroup');
-            const toggleLitrField = () => {
-                if(!typeBenzin || !typeXerc || !litrGroup) return; 
-                if (typeBenzin.checked) {
-                    litrGroup.style.display = 'block';
-                    litrGroup.querySelector('#litr').removeAttribute('required'); 
-                } else { 
-                    litrGroup.style.display = 'none';
-                    litrGroup.querySelector('#litr').removeAttribute('required');
-                }
-            };
-            if(typeBenzin) typeBenzin.addEventListener('change', toggleLitrField);
-            if(typeXerc) typeXerc.addEventListener('change', toggleLitrField);
-            toggleLitrField(); 
+            
+            // KÖHNƏ LİTR MƏNTİQİ (RADIO DÜYMƏLƏR) ARTIQ LAZIM DEYİL
 
             // Avtomobil meta modalı
             const carMetaModal = document.getElementById('carMetaModal');
@@ -371,7 +406,7 @@
 
                     carMetaModal.querySelector('#metaBrand').value = brand;
                     carMetaModal.querySelector('#metaModelName').value = modelName;
-                    carMetaMetaModal.querySelector('#metaCategory').value = category;
+                    carMetaModal.querySelector('#metaCategory').value = category; // Düzəliş: carMetaMetaModal -> carMetaModal
 
                     carMetaModal.querySelector('#metaDriver').value = driverId; 
                     carMetaModal.querySelector('#metaAssistant').value = assistantId;

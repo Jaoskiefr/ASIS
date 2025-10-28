@@ -34,11 +34,22 @@
   {% include 'operator_navbar.html' %}
 
   <div class="container-fluid mt-4 content-container">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="alert alert-{{ category or 'info' }} alert-dismissible fade show" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+          </div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+    
     <h3 class="text-dark mb-4"><i class="fas fa-user-tie"></i> Planlamaçı İdarəetmə Paneli</h3>
 
     <div class="card mb-4">
       <div class="card-header bg-dark text-white">
-        Yeni Planlamaçı Əlavə Et
+        Yeni Planlamaçı Əlavə Et (Tək-tək)
       </div>
       <div class="card-body">
         <form class="row g-2" method="POST" action="{{ url_for('add_planner') }}">
@@ -53,6 +64,25 @@
       </div>
     </div>
 
+    <div class="card mb-4">
+        <div class="card-header bg-dark-subtle">
+            Toplu Planlamaçı Əlavə Et
+        </div>
+        <div class="card-body">
+            <form method="POST" action="{{ url_for('bulk_add_planner') }}">
+                <div class="mb-3">
+                    <label class="form-label">Planlamaçı Adları</label>
+                    <textarea class="form-control" name="bulk_data" rows="8" placeholder="Hər sətrə bir planlamaçı adı daxil edin."></textarea>
+                    <div class="form-text">
+                        Nümunə:<br>
+                        Rüfət Məmmədli<br>
+                        Leyla Əliyeva
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-outline-dark"><i class="fas fa-save"></i> Hamısını Yadda Saxla</button>
+            </form>
+        </div>
+    </div>
     <h5 class="mb-3">Mövcud Planlamaçılar</h5>
     <div class="table-responsive">
       <table class="table table-striped align-middle">
@@ -74,7 +104,9 @@
                   <i class="fas fa-edit"></i> Redaktə
                 </a>
                 <form method="POST" action="{{ url_for('delete_planner', pid=p.id) }}" class="d-inline" onsubmit="return confirm('Silməyə əminsiniz?');">
-                  <button class="btn btn-sm btn-danger"><i class="fas fa-trash-alt"></i> Sil</button>
+                  <button class="btn btn-sm btn-danger" {% if p.has_expenses %}disabled title="Bu planlamaçının adına xərc olduğu üçün silinə bilməz."{% endif %}>
+                    <i class="fas fa-trash-alt"></i> Sil
+                  </button>
                 </form>
               </td>
             </tr>

@@ -20,12 +20,23 @@
     {% include 'operator_navbar.html' %} 
 
     <div class="container-fluid mt-4 content-container">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category or 'info' }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
         <h1 class="text-info"><i class="fas fa-car-side"></i> Avtomobil İdarəetmə Paneli</h1>
         <hr>
         
         <div class="card mb-4">
             <div class="card-header bg-info text-white">
-                Yeni Avtomobil Əlavə Et
+                Yeni Avtomobil Əlavə Et (Tək-tək)
             </div>
             <div class="card-body">
                 <form method="POST" action="{{ url_for('add_car') }}">
@@ -38,7 +49,6 @@
                             <label class="form-label">Model</label>
                             <input type="text" class="form-control" name="model" required>
                         </div>
-
                         <div class="col-md-2 mb-3">
                             <label class="form-label">Köməkçi Təyinatı</label>
                             <select class="form-select" name="assistant_id">
@@ -48,7 +58,6 @@
                                 {% endfor %}
                             </select>
                         </div>
-
                         <div class="col-md-2 mb-3">
                             <label class="form-label">Sürücü Təyinatı</label>
                             <select class="form-select" name="driver_id">
@@ -58,7 +67,6 @@
                                 {% endfor %}
                             </select>
                         </div>
-
                         <div class="col-md-2 mb-3">
                             <label class="form-label">Planlamaçı Təyinatı</label>
                             <select class="form-select" name="planner_id">
@@ -69,7 +77,6 @@
                             </select>
                         </div>
                     </div>
-
                     <button type="submit" class="btn btn-info text-white">
                         <i class="fas fa-save"></i> Avtomobili Yadda Saxla
                     </button>
@@ -77,6 +84,25 @@
             </div>
         </div>
 
+        <div class="card mb-4">
+            <div class="card-header bg-info-subtle">
+                Toplu Avtomobil Əlavə Et
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('bulk_add_car') }}">
+                    <div class="mb-3">
+                        <label class="form-label">Avtomobil Siyahısı</label>
+                        <textarea class="form-control" name="bulk_data" rows="8" placeholder="Hər sətrə bir avtomobil daxil edin. Məlumatları nöqtəli vergül (;) ilə ayırın."></textarea>
+                        <div class="form-text">
+                            Format: <code>Nömrə Nişanı;Model</code><br>
+                            Nümunə: <code>99-XX-123;Toyota Prius</code><br>
+                            Nümunə 2: <code>10-ZZ-456;Ford Transit</code>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-outline-info text-dark"><i class="fas fa-save"></i> Hamısını Yadda Saxla</button>
+                </form>
+            </div>
+        </div>
         <h2 class="mt-5">Mövcud Avtomobillər</h2>
         <div class="table-responsive">
             <table class="table table-striped table-bordered table-hover">
@@ -108,7 +134,7 @@
                                 <i class="fas fa-edit"></i> Redaktə
                             </a>
                             <form method="POST" action="{{ url_for('delete_car', id=car.id) }}" class="form-inline-delete" onsubmit="return confirm('Bu avtomobili silmək istədiyinizə əminsiniz?');">
-                                <button type="submit" class="btn btn-sm btn-danger">
+                                <button type="submit" class="btn btn-sm btn-danger" {% if car.has_expenses %}disabled title="Bu avtomobilin adına xərc olduğu üçün silinə bilməz."{% endif %}>
                                     <i class="fas fa-trash-alt"></i> Sil
                                 </button>
                             </form>
@@ -119,7 +145,6 @@
             </table>
         </div>
     </div>
-
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

@@ -1,5 +1,6 @@
 from flask import Flask, render_template, request, redirect, url_for, session, flash
 from datetime import datetime
+from dateutil.relativedelta import relativedelta # Tarix fərqini hesablamaq üçün
 
 # ----------------------------------------------------
 # 1. FLASK TƏTBİQİNİN QURULMASI
@@ -18,19 +19,20 @@ USERS = [
 ]
 next_user_id = 3 
 
-# Sürücü Məlumatları
+# Sürücü Məlumatları - YENİLƏNİB: start_date əlavə edildi
 DRIVERS_DATA = [
-    {"id": 101, "name": "Cavid Məmmədov Əli oğlu", "license_no": "AZE12345", "phone": "050-111-22-33"},
-    {"id": 102, "name": "Nigar Əliyeva Zaur qızı", "license_no": "AZE67890", "phone": "051-444-55-66"},
-    {"id": 103, "name": "Rəşad Həsənov Samir oğlu", "license_no": "AZE10111", "phone": "055-777-88-99"},
+    {"id": 101, "name": "Cavid Məmmədov Əli oğlu", "license_no": "AZE12345", "phone": "050-111-22-33", "start_date": "2023-10-28"},
+    {"id": 102, "name": "Nigar Əliyeva Zaur qızı", "license_no": "AZE67890", "phone": "051-444-55-66", "start_date": "2024-05-15"},
+    {"id": 103, "name": "Rəşad Həsənov Samir oğlu", "license_no": "AZE10111", "phone": "055-777-88-99", "start_date": None}, # Başlama tarixi yoxdur
+    {"id": 104, "name": "Nurlan Seyfiyev Cəyanət", "license_no": "", "phone": "050-XXX-XX-XX", "start_date": "2025-09-01"}, # Yeni sürücü
 ]
 
 # Köməkçi və Planlamaçı kataloqları (operator idarə edir)
 ASSISTANTS_DATA = [
-    {"id": 201, "name": "Vahid Vahidli"} # Test üçün əlavə edildi
+    {"id": 201, "name": "Vahid Vahidli"} 
 ]
 PLANNERS_DATA = [
-    {"id": 301, "name": "Asif Atabəyov"} # Test üçün əlavə edildi
+    {"id": 301, "name": "Asif Atabəyov"} 
 ]
 
 def _next_id(seq, start):
@@ -47,17 +49,22 @@ CARS_DATA = [
      "brand": "Ford", "model_name": "Transit", "category": "Minik Avtomobili", "assistant_id": 201, "planner_id": 301, "notes": ""},
 ]
 
-# Xərc Məlumatları (Xərc anındakı təyinatlar ilə)
+# Xərc Məlumatları
 EXPENSES = [
-    {"car_id": 1, "amount": 85.50, "type": "Yanacaq", "litr": 15.0, "description": "AI-92", "entered_by": "operator", "timestamp": datetime(2025, 10, 20, 9, 30),
+    {"car_id": 1, "amount": 85.50, "type": "Yanacaq", "litr": 15.0, "description": "AI-92 - Qeyd", "entered_by": "operator", "timestamp": datetime(2025, 10, 20, 9, 30),
      "driver_id_at_expense": 101, "assistant_id_at_expense": None, "planner_id_at_expense": None},
-    {"car_id": 2, "amount": 40.00, "type": "Xərc", "litr": 0, "description": "Yuma xərci", "entered_by": "admin", "timestamp": datetime(2025, 10, 21, 14, 15),
+    {"car_id": 2, "amount": 40.00, "type": "Avtoyuma", "litr": 0, "description": "Yuma xərci", "entered_by": "admin", "timestamp": datetime(2025, 10, 21, 14, 15),
      "driver_id_at_expense": 102, "assistant_id_at_expense": None, "planner_id_at_expense": 301}, 
-    {"car_id": 1, "amount": 250.00, "type": "Xərc", "litr": 0, "description": "Yağ dəyişimi", "entered_by": "operator", "timestamp": datetime(2025, 10, 22, 17, 0),
+    {"car_id": 1, "amount": 250.00, "type": "Təmir", "litr": 0, "description": "Yağ dəyişimi", "entered_by": "operator", "timestamp": datetime(2025, 10, 22, 17, 0),
      "driver_id_at_expense": 101, "assistant_id_at_expense": None, "planner_id_at_expense": None},
-    {"car_id": 3, "amount": 100.00, "type": "Yanacaq", "litr": 20.0, "description": "AI-95", "entered_by": "operator", "timestamp": datetime(2025, 10, 25, 16, 19),
+    {"car_id": 3, "amount": 100.00, "type": "Yanacaq", "litr": 20.0, "description": "AI-95 - Qeyd 2", "entered_by": "operator", "timestamp": datetime(2025, 10, 25, 16, 19),
      "driver_id_at_expense": None, "assistant_id_at_expense": 201, "planner_id_at_expense": 301},
+    {"car_id": 2, "amount": 50.00, "type": "Cərimə", "litr": 0, "description": "Sürət həddi", "entered_by": "admin", "timestamp": datetime(2025, 10, 27, 11, 00),
+     "driver_id_at_expense": 102, "assistant_id_at_expense": None, "planner_id_at_expense": 301}, 
 ]
+
+# Xərc növlərinin siyahısı (filtr üçün)
+EXPENSE_TYPES = ["Yanacaq", "Təmir", "Cərimə", "Avtoyuma", "Yemək", "Digər"]
 
 # ----------------------------------------------------
 # 3. KÖMƏKÇİ FUNKSİYALAR
@@ -110,7 +117,6 @@ def get_dashboard_data():
         total_expense = sum(e['amount'] for e in car_expenses)
         last_expense_entered_by = car_expenses[-1]['entered_by'] if car_expenses else "Yoxdur"
         
-        # Xərc tarixçəsi üçün detallı məlumatlar
         detailed_expenses = []
         for e in sorted(car_expenses, key=lambda x: x['timestamp'], reverse=True):
             driver_at_expense = get_driver_by_id(e.get('driver_id_at_expense'))
@@ -129,7 +135,6 @@ def get_dashboard_data():
         assistant = get_assistant_by_id(car.get('assistant_id'))
         planner = get_planner_by_id(car.get('planner_id'))
         
-        # Şablona göndəriləcək yekun məlumat
         full_data.append({
             "id": car['id'], "driver_id": car['driver_id'], "car_number": car['car_number'],
             "brand_model": f"{brand} / {model_name}".strip(" /"), "category": car.get('category', ""),
@@ -143,16 +148,48 @@ def get_dashboard_data():
         })
     return full_data
 
+def calculate_experience(start_date_str):
+    """Verilmiş başlama tarixindən bu günə qədər olan təcrübəni 'X il, Y ay' formatında qaytarır."""
+    if not start_date_str:
+        return "-"
+    try:
+        start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+        today = datetime.now().date()
+        
+        if start_date > today:
+            return "Başlamayıb"
+            
+        delta = relativedelta(today, start_date)
+        
+        years = delta.years
+        months = delta.months
+        
+        experience_parts = []
+        if years > 0:
+            experience_parts.append(f"{years} il")
+        if months > 0:
+            experience_parts.append(f"{months} ay")
+            
+        if not experience_parts: 
+             if delta.days >= 0: 
+                 return "Yeni" 
+             else:
+                 return "-" 
+                 
+        return ", ".join(experience_parts)
+        
+    except ValueError:
+        return "Tarix xətası" 
+
 # ----------------------------------------------------
 # 4. GİRİŞ VƏ İCAZƏ FUNKSİYALARI
 # ----------------------------------------------------
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    """İstifadəçi giriş səhifəsi və prosesi."""
     if request.method == 'POST':
         username = request.form['username']; password = request.form['password']
         user = get_user_by_username(username)
-        if user and user['password'] == password: # Real tətbiqdə hash ilə yoxlanmalıdır!
+        if user and user['password'] == password: 
             session['user'] = user['username']
             session['role'] = user['role']
             session['fullname'] = user['fullname']
@@ -161,22 +198,18 @@ def login():
         else:
             error = 'Yanlış istifadəçi adı və ya parol.'
             return render_template('login.html', error=error)
-    # GET request üçün login səhifəsini göstər
     return render_template('login.html')
 
 @app.route('/logout')
 def logout():
-    """İstifadəçi çıxış prosesi."""
     session.pop('user', None); session.pop('role', None); session.pop('fullname', None)
     flash("Sistemdən çıxış etdiniz.", 'info')
     return redirect(url_for('login'))
 
 def is_admin():
-    """Sessiondakı istifadəçinin admin olub olmadığını yoxlayır."""
     return session.get('role') == 'admin'
 
 def is_operator():
-    """Sessiondakı istifadəçinin operator olub olmadığını yoxlayır."""
     return session.get('role') == 'user'
 
 # ----------------------------------------------------
@@ -184,37 +217,36 @@ def is_operator():
 # ----------------------------------------------------
 @app.route('/')
 def index():
-    """Giriş etmiş istifadəçini roluna uyğun dashboarda yönləndirir."""
     if 'user' not in session:
         return redirect(url_for('login'))
     
     # === ADMİN DASHBOARD MƏLUMATLARI ===
     if session['role'] == 'admin':
-        # Bütün sayları hesablayırıq
         total_operator_count = len([u for u in USERS if u['role'] == 'user'])
         total_car_count = len(CARS_DATA)
         total_driver_count = len(DRIVERS_DATA)
-        total_assistant_count = len(ASSISTANTS_DATA) # Əlavə edildi
-        total_planner_count = len(PLANNERS_DATA)     # Əlavə edildi
+        total_assistant_count = len(ASSISTANTS_DATA)
+        total_planner_count = len(PLANNERS_DATA)
         
-        # Aylıq xərcləri hesablayırıq (yalnız operatorlarınkı)
         now = datetime.now()
         current_month_expenses = [
             e for e in EXPENSES 
             if e['timestamp'].month == now.month and e['timestamp'].year == now.year
-            and get_user_by_username(e['entered_by']) and get_user_by_username(e['entered_by'])['role'] == 'user'
         ]
         monthly_total = sum(e['amount'] for e in current_month_expenses)
         
-        # Diaqram üçün xərc növlərinə görə qruplaşdırma
         expense_data = {} 
         for e in current_month_expenses:
             e_type = e.get('type', 'Digər') 
             expense_data[e_type] = expense_data.get(e_type, 0) + e['amount']
-        chart_labels = list(expense_data.keys())
-        chart_data_values = list(expense_data.values())
+        
+        chart_labels = []
+        chart_data_values = []
+        for expense_type in EXPENSE_TYPES:
+            if expense_type in expense_data:
+                chart_labels.append(expense_type)
+                chart_data_values.append(expense_data[expense_type])
 
-        # Şablona bütün statistikaları göndəririk
         return render_template(
             'admin_dashboard.html', 
             user_role=session['role'],
@@ -222,8 +254,8 @@ def index():
                 'operator_count': total_operator_count, 
                 'car_count': total_car_count,
                 'driver_count': total_driver_count, 
-                'assistant_count': total_assistant_count, # Əlavə edildi
-                'planner_count': total_planner_count,     # Əlavə edildi
+                'assistant_count': total_assistant_count,
+                'planner_count': total_planner_count,
                 'monthly_total': monthly_total
             },
             chart_data={'labels': chart_labels, 'data': chart_data_values}
@@ -240,22 +272,25 @@ def index():
         assistants=ASSISTANTS_DATA,
         planners=PLANNERS_DATA
     )
-    # === OPERATOR DASHBOARD BİTDİ ===
 
 # ----------------------------------------------------
 # 6. OPERATOR FUNKSİYALARI (CRUD Əməliyyatları)
 # ----------------------------------------------------
 @app.route('/add_expense', methods=['POST'])
 def add_expense():
-    """Yeni xərc və ya yanacaq məlumatını əlavə edir (xərc anındakı təyinatlarla)."""
-    if not is_operator(): return redirect(url_for('login'))
+    if not is_operator(): return redirect(url_for('index'))
     
-    # Formdan məlumatları al
-    car_id = request.form.get('car_id'); expense_type = request.form.get('expense_type')
-    amount = request.form.get('amount'); litr = request.form.get('litr', 0)
-    description = request.form.get('description')
+    car_id = request.form.get('car_id')
+    expense_type = request.form.get('expense_type') 
+    amount = request.form.get('amount')
+    litr = request.form.get('litr', 0)
+    description = request.form.get('description', '') 
+    fuel_subtype = request.form.get('fuel_subtype', '') 
     
-    # Xərci əlavə edərkən avtomobilin cari təyinatlarını "snapshot" et
+    final_description = description
+    if expense_type == 'Yanacaq' and fuel_subtype:
+        final_description = f"{fuel_subtype} - {description}" if description else fuel_subtype
+
     car = get_car_by_id(car_id)
     driver_id_at_expense, assistant_id_at_expense, planner_id_at_expense = None, None, None
     if car:
@@ -263,22 +298,24 @@ def add_expense():
         assistant_id_at_expense = car.get('assistant_id')
         planner_id_at_expense = car.get('planner_id')
 
-    # Yeni xərc lüğətini yarat
     new_expense = {
-        "car_id": int(car_id), "type": expense_type, "amount": float(amount), "litr": float(litr) if litr else 0.0,
-        "description": description, "entered_by": session['user'], "timestamp": datetime.now(),
+        "car_id": int(car_id), 
+        "type": expense_type,  
+        "amount": float(amount), 
+        "litr": float(litr) if litr else 0.0,
+        "description": final_description, 
+        "entered_by": session['user'], 
+        "timestamp": datetime.now(),
         "driver_id_at_expense": driver_id_at_expense, 
         "assistant_id_at_expense": assistant_id_at_expense,
         "planner_id_at_expense": planner_id_at_expense
     }
-    EXPENSES.append(new_expense) # Xərci siyahıya əlavə et
-    flash('Xərc uğurla əlavə edildi.', 'success')
+    EXPENSES.append(new_expense) 
+    flash(f'{expense_type} xərci uğurla əlavə edildi.', 'success')
     return redirect(url_for('index'))
 
-# Qeyd: assign_car funksiyası dashboarddan çağırılmasa da, silinmir. Başqa yerdə istifadə oluna bilər.
 @app.route('/assign_car', methods=['POST'])
 def assign_car(): 
-    """Avtomobilə sürücü təyin edir (köhnə modal üçün idi)."""
     if not is_operator(): return redirect(url_for('login'))
     car_id = request.form.get('car_id'); driver_id = request.form.get('driver_id'); car_to_assign = get_car_by_id(car_id)
     if car_to_assign: car_to_assign['driver_id'] = int(driver_id) if driver_id else None
@@ -286,18 +323,15 @@ def assign_car():
 
 @app.route('/update_car_meta', methods=['POST'])
 def update_car_meta():
-    """Operator dashboardındakı "Avtomobil Məlumatları" modalından gələn datanı yadda saxlayır."""
     if not is_operator(): return redirect(url_for('login'))
     
     car_id = request.form.get('car_id'); car = get_car_by_id(car_id)
     if car:
-        # Formdan gələn dəyərləri al və təmizlə
         car['brand'] = request.form.get('brand', '').strip()
         car['model_name'] = request.form.get('model_name', '').strip()
         car['category'] = request.form.get('category', '').strip()
         d_id = request.form.get('driver_id'); a_id = request.form.get('assistant_id'); p_id = request.form.get('planner_id')
         
-        # ID-ləri integerə çevir (əgər seçilibsə), yoxsa None təyin et
         car['driver_id'] = int(d_id) if d_id else None
         car['assistant_id'] = int(a_id) if a_id else None
         car['planner_id'] = int(p_id) if p_id else None
@@ -314,31 +348,40 @@ def update_car_meta():
 @app.route('/admin/drivers')
 def admin_drivers():
     """Sürücü siyahısını və əlavə etmə formasını göstərir."""
-    if not is_operator(): return redirect(url_for('index')) # Yalnız operator girə bilər
-    return render_template('admin_drivers.html', drivers=DRIVERS_DATA)
+    if not is_operator(): return redirect(url_for('index'))
+    
+    drivers_processed = []
+    for driver in DRIVERS_DATA:
+        driver_copy = driver.copy() 
+        driver_copy['has_expenses'] = any(e.get('driver_id_at_expense') == driver_copy['id'] for e in EXPENSES)
+        driver_copy['experience_str'] = calculate_experience(driver_copy.get('start_date'))
+        drivers_processed.append(driver_copy)
+        
+    return render_template('admin_drivers.html', drivers=drivers_processed)
 
 @app.route('/admin/cars')
 def admin_cars():
-    """Avtomobil siyahısını və əlavə etmə formasını göstərir."""
     if not is_operator(): return redirect(url_for('index'))
-    # Silmə düyməsinin aktiv/deaktiv olması üçün xərc məlumatını əlavə et
     cars_with_expense_info = []
     for car in CARS_DATA: 
-        car['has_expenses'] = any(e['car_id'] == car['id'] for e in EXPENSES)
-        cars_with_expense_info.append(car)
-    # Təyinat dropdownları üçün siyahıları göndər
+        car_copy = car.copy()
+        car_copy['has_expenses'] = any(e['car_id'] == car_copy['id'] for e in EXPENSES)
+        cars_with_expense_info.append(car_copy)
     return render_template('admin_cars.html', cars=cars_with_expense_info, 
                            drivers=DRIVERS_DATA, assistants=ASSISTANTS_DATA, planners=PLANNERS_DATA) 
 
 @app.route('/admin/assistants')
 def admin_assistants():
-    """Köməkçi siyahısını və əlavə etmə formasını göstərir."""
     if not is_operator(): return redirect(url_for('index'))
-    return render_template('admin_assistants.html', assistants=ASSISTANTS_DATA)
+    assistants_with_expense_info = []
+    for a in ASSISTANTS_DATA:
+        a_copy = a.copy()
+        a_copy['has_expenses'] = any(e.get('assistant_id_at_expense') == a_copy['id'] for e in EXPENSES)
+        assistants_with_expense_info.append(a_copy)
+    return render_template('admin_assistants.html', assistants=assistants_with_expense_info)
 
 @app.route('/admin/assistants/add', methods=['POST'])
 def add_assistant():
-    """Yeni köməkçi əlavə edir."""
     if not is_operator(): return redirect(url_for('index'))
     name = request.form['name'].strip()
     if name: 
@@ -348,7 +391,6 @@ def add_assistant():
 
 @app.route('/admin/assistant/edit/<int:aid>', methods=['GET', 'POST'])
 def edit_assistant(aid):
-    """Mövcud köməkçini redaktə edir."""
     if not is_operator(): return redirect(url_for('index'))
     assistant = get_assistant_by_id(aid)
     if not assistant: return redirect(url_for('admin_assistants'))
@@ -361,26 +403,30 @@ def edit_assistant(aid):
 
 @app.route('/admin/assistant/delete/<int:aid>', methods=['POST'])
 def delete_assistant(aid):
-    """Mövcud köməkçini silir."""
     if not is_operator(): return redirect(url_for('index'))
+    if any(e.get('assistant_id_at_expense') == aid for e in EXPENSES):
+        flash('Bu köməkçi silinə bilməz! Köməkçiyə aid xərc məlumatı mövcuddur.', 'danger')
+        return redirect(url_for('admin_assistants')) 
     assistant = get_assistant_by_id(aid)
     if assistant: 
         name = assistant['name']
         ASSISTANTS_DATA.remove(assistant)
-        # Silinən köməkçini avtomobillərdən də qaldır
         [car.update({'assistant_id': None}) for car in CARS_DATA if car.get('assistant_id') == aid]
         flash(f"Köməkçi '{name}' silindi.", 'success')
     return redirect(url_for('admin_assistants'))
 
 @app.route('/admin/planners')
 def admin_planners():
-    """Planlamaçı siyahısını və əlavə etmə formasını göstərir."""
     if not is_operator(): return redirect(url_for('index'))
-    return render_template('admin_planners.html', planners=PLANNERS_DATA)
+    planners_with_expense_info = []
+    for p in PLANNERS_DATA:
+        p_copy = p.copy()
+        p_copy['has_expenses'] = any(e.get('planner_id_at_expense') == p_copy['id'] for e in EXPENSES)
+        planners_with_expense_info.append(p_copy)
+    return render_template('admin_planners.html', planners=planners_with_expense_info)
 
 @app.route('/admin/planners/add', methods=['POST'])
 def add_planner():
-    """Yeni planlamaçı əlavə edir."""
     if not is_operator(): return redirect(url_for('index'))
     name = request.form['name'].strip()
     if name: 
@@ -390,7 +436,6 @@ def add_planner():
 
 @app.route('/admin/planner/edit/<int:pid>', methods=['GET', 'POST'])
 def edit_planner(pid):
-    """Mövcud planlamaçını redaktə edir."""
     if not is_operator(): return redirect(url_for('index'))
     planner = get_planner_by_id(pid)
     if not planner: return redirect(url_for('admin_planners'))
@@ -403,13 +448,14 @@ def edit_planner(pid):
 
 @app.route('/admin/planner/delete/<int:pid>', methods=['POST'])
 def delete_planner(pid):
-    """Mövcud planlamaçını silir."""
     if not is_operator(): return redirect(url_for('index'))
+    if any(e.get('planner_id_at_expense') == pid for e in EXPENSES):
+        flash('Bu planlamaçı silinə bilməz! Planlamaçıya aid xərc məlumatı mövcuddur.', 'danger')
+        return redirect(url_for('admin_planners')) 
     planner = get_planner_by_id(pid)
     if planner: 
         name = planner['name']
         PLANNERS_DATA.remove(planner)
-        # Silinən planlamaçını avtomobillərdən də qaldır
         [car.update({'planner_id': None}) for car in CARS_DATA if car.get('planner_id') == pid]
         flash(f"Planlamaçı '{name}' silindi.", 'success')
     return redirect(url_for('admin_planners'))
@@ -418,64 +464,84 @@ def delete_planner(pid):
 def add_driver():
     """Yeni sürücü əlavə edir."""
     if not is_operator(): return redirect(url_for('index'))
-    name = request.form['name']; license_no = request.form['license_no']; phone = request.form['phone']
-    DRIVERS_DATA.append({"id": _next_id(DRIVERS_DATA, 101), "name": name, "license_no": license_no, "phone": phone})
+    
+    name = request.form.get('name', '').strip()
+    license_no = request.form.get('license_no', '').strip()
+    phone = request.form.get('phone', '').strip()
+    start_date = request.form.get('start_date', '').strip() 
+
+    if not name:
+        flash("Sürücü adı mütləq daxil edilməlidir.", "danger")
+        return redirect(url_for('admin_drivers'))
+
+    if license_no and any(d['license_no'] == license_no for d in DRIVERS_DATA if d.get('license_no')):
+        flash(f"'{license_no}' vəsiqə nömrəsi artıq sistemdə mövcuddur.", 'danger')
+        return redirect(url_for('admin_drivers'))
+        
+    if start_date:
+        try:
+            datetime.strptime(start_date, '%Y-%m-%d')
+        except ValueError:
+            flash("İşə başlama tarixi formatı yanlışdır (YYYY-MM-DD olmalıdır).", "warning")
+            start_date = None 
+
+    DRIVERS_DATA.append({
+        "id": _next_id(DRIVERS_DATA, 101), 
+        "name": name, 
+        "license_no": license_no, 
+        "phone": phone,
+        "start_date": start_date 
+        })
     flash(f"Sürücü '{name}' əlavə edildi.", 'success')
     return redirect(url_for('admin_drivers'))
 
 @app.route('/admin/cars/add', methods=['POST'])
 def add_car():
-    """Yeni avtomobil əlavə edir."""
     if not is_operator(): return redirect(url_for('index'))
     car_number = request.form['car_number']; model = request.form['model']
     driver_id = int(request.form['driver_id']) if request.form.get('driver_id') else None
     assistant_id = int(request.form['assistant_id']) if request.form.get('assistant_id') else None
     planner_id = int(request.form['planner_id']) if request.form.get('planner_id') else None
     
-    # Yeni ID təyin et
     new_id = max([c['id'] for c in CARS_DATA] + [0]) + 1 
     
     CARS_DATA.append({
         "id": new_id, "driver_id": driver_id, "assistant_id": assistant_id, "planner_id": planner_id,
         "car_number": car_number, "model": model, 
-        "brand": "", "model_name": "", "category": "", "notes": "" # İlkin dəyərlər
+        "brand": "", "model_name": "", "category": "", "notes": "" 
     })
     flash(f"Avtomobil '{car_number}' əlavə edildi.", 'success')
     return redirect(url_for('admin_cars'))
 
 @app.route('/admin/driver/delete/<int:id>', methods=['POST'])
 def delete_driver(id):
-    """Mövcud sürücünü silir."""
     if not is_operator(): return redirect(url_for('index'))
+    if any(e.get('driver_id_at_expense') == id for e in EXPENSES):
+        flash('Bu sürücü silinə bilməz! Sürücüyə aid xərc məlumatı mövcuddur.', 'danger')
+        return redirect(url_for('admin_drivers')) 
     driver = get_driver_by_id(id)
     if driver: 
         name = driver['name']
         DRIVERS_DATA.remove(driver)
-        # Silinən sürücünü avtomobillərdən də qaldır
         [car.update({'driver_id': None}) for car in CARS_DATA if car['driver_id'] == id]
         flash(f"Sürücü '{name}' silindi.", 'success')
     return redirect(url_for('admin_drivers'))
 
 @app.route('/admin/car/delete/<int:id>', methods=['POST'])
 def delete_car(id):
-    """Mövcud avtomobili silir (əgər xərci yoxdursa)."""
     if not is_operator(): return redirect(url_for('login'))
-    
+    redirect_url = request.referrer or url_for('index')
     car = get_car_by_id(id)
     if not car:
         flash('Avtomobil tapılmadı.', 'danger')
-        # Əvvəlki səhifəyə qayıt (ya dashboard, ya da /admin/cars)
-        return redirect(request.referrer or url_for('index')) 
-
-    # Xərclərin olub olmadığını yoxla
+        return redirect(redirect_url) 
     if any(e['car_id'] == id for e in EXPENSES):
         flash('Bu avtomobil silinə bilməz! Avtomobilə aid xərc məlumatı mövcuddur.', 'danger')
     else:
         car_number = car['car_number']
         CARS_DATA.remove(car)
         flash(f"Avtomobil '{car_number}' uğurla silindi.", 'success')
-        
-    return redirect(request.referrer or url_for('index'))
+    return redirect(redirect_url) 
 
 @app.route('/admin/driver/edit/<int:id>', methods=['GET', 'POST'])
 def edit_driver(id):
@@ -483,102 +549,183 @@ def edit_driver(id):
     if not is_operator(): return redirect(url_for('index'))
     driver = get_driver_by_id(id)
     if not driver: return redirect(url_for('admin_drivers'))
+    
     if request.method == 'POST': 
         driver['name'] = request.form['name']
-        driver['license_no'] = request.form['license_no']
+        driver['license_no'] = request.form.get('license_no', '') 
         driver['phone'] = request.form['phone']
+        start_date = request.form.get('start_date', '').strip() 
+        
+        if start_date:
+            try:
+                datetime.strptime(start_date, '%Y-%m-%d')
+                driver['start_date'] = start_date 
+            except ValueError:
+                flash("İşə başlama tarixi formatı yanlışdır (YYYY-MM-DD olmalıdır). Tarix yenilənmədi.", "warning")
+        else:
+             driver['start_date'] = None 
+             
         flash(f"Sürücü '{driver['name']}' məlumatları yeniləndi.", 'success')
         return redirect(url_for('admin_drivers'))
+        
     return render_template('edit_driver.html', driver=driver)
 
 @app.route('/admin/car/edit/<int:id>', methods=['GET', 'POST'])
 def edit_car(id):
-    """Mövcud avtomobili redaktə edir (yalnız /admin/cars səhifəsindən)."""
     if not is_operator(): return redirect(url_for('index'))
     car = get_car_by_id(id)
-    if not car: return redirect(url_for('admin_cars')) # Bu səhifə yalnız admin_cars-dan çağırılır
+    if not car: return redirect(url_for('admin_cars')) 
     if request.method == 'POST': 
         car['car_number'] = request.form['car_number']
         car['model'] = request.form['model']
-        # Bu səhifədə bütün təyinatları da dəyişmək olar (əlavə etmək olar)
         car['driver_id'] = int(request.form['driver_id']) if request.form['driver_id'] else None 
-        # assistant_id və planner_id üçün də inputlar əlavə edib burada update etmək olar
         flash(f"Avtomobil '{car['car_number']}' məlumatları yeniləndi.", 'success')
-        # Bu səhifə yalnız admin_cars-dan gəldiyi üçün ora qayıdırıq
         return redirect(url_for('admin_cars')) 
-    # Redaktə formasına sürücü siyahısını göndərmək lazımdır
     return render_template('edit_car.html', car=car, drivers=DRIVERS_DATA)
 
+
 # ----------------------------------------------------
-# 7. YALNIZ ADMİN FUNKSİYALARI (İstifadəçi İdarəetməsi)
+# 7. TOPLU ƏLAVƏ ETMƏ FUNKSİYALARI
+# ----------------------------------------------------
+
+@app.route('/admin/drivers/bulk_add', methods=['POST'])
+def bulk_add_driver():
+    """Toplu şəkildə sürücüləri əlavə edir."""
+    if not is_operator(): return redirect(url_for('index'))
+    
+    bulk_data = request.form.get('bulk_data', '')
+    added_count = 0; skipped_count = 0
+    next_driver_id = _next_id(DRIVERS_DATA, 101)
+    existing_licenses = {d['license_no'] for d in DRIVERS_DATA if d.get('license_no')}
+
+    for line in bulk_data.splitlines():
+        if not line.strip(): continue 
+        
+        parts = line.split(';')
+        if not parts: continue
+        
+        name = parts[0].strip()
+        if not name: skipped_count += 1; continue 
+
+        license_no = parts[1].strip() if len(parts) > 1 else ""
+        phone = parts[2].strip() if len(parts) > 2 else ""
+        start_date = parts[3].strip() if len(parts) > 3 else None 
+
+        if start_date:
+            try: datetime.strptime(start_date, '%Y-%m-%d')
+            except ValueError: start_date = None 
+
+        if license_no and license_no in existing_licenses:
+            skipped_count += 1
+            continue
+            
+        new_driver = {"id": next_driver_id, "name": name, "license_no": license_no, "phone": phone, "start_date": start_date }
+        DRIVERS_DATA.append(new_driver)
+        if license_no: existing_licenses.add(license_no)
+        next_driver_id += 1; added_count += 1
+            
+    flash(f"{added_count} sürücü uğurla əlavə edildi. {skipped_count} sətir (təkrarlanan vəsiqə və ya səhv format) ötürüldü.", 'success')
+    return redirect(url_for('admin_drivers'))
+
+@app.route('/admin/cars/bulk_add', methods=['POST'])
+def bulk_add_car():
+    if not is_operator(): return redirect(url_for('index'))
+    bulk_data = request.form.get('bulk_data', '')
+    added_count = 0; skipped_count = 0
+    next_car_id = _next_id(CARS_DATA, 1)
+    existing_car_numbers = {c['car_number'] for c in CARS_DATA}
+    for line in bulk_data.splitlines():
+        if not line.strip(): continue
+        parts = line.split(';')
+        if len(parts) < 2: skipped_count += 1; continue 
+        car_number = parts[0].strip(); model = parts[1].strip()
+        if not car_number or not model: skipped_count += 1; continue
+        if car_number not in existing_car_numbers:
+            CARS_DATA.append({"id": next_car_id, "car_number": car_number, "model": model, "driver_id": None, "assistant_id": None, "planner_id": None, "brand": "", "model_name": "", "category": "", "notes": ""})
+            existing_car_numbers.add(car_number); next_car_id += 1; added_count += 1
+        else: skipped_count += 1
+    flash(f"{added_count} avtomobil uğurla əlavə edildi. {skipped_count} sətir (təkrarlanan nömrə və ya səhv format) ötürüldü.", 'success')
+    return redirect(url_for('admin_cars'))
+
+@app.route('/admin/assistants/bulk_add', methods=['POST'])
+def bulk_add_assistant():
+    if not is_operator(): return redirect(url_for('index'))
+    bulk_data = request.form.get('bulk_data', ''); added_count = 0; skipped_count = 0
+    next_assistant_id = _next_id(ASSISTANTS_DATA, 201)
+    existing_assistants = {a['name'].lower() for a in ASSISTANTS_DATA}
+    for line in bulk_data.splitlines():
+        name = line.strip(); 
+        if not name: continue
+        if name.lower() not in existing_assistants:
+            ASSISTANTS_DATA.append({"id": next_assistant_id, "name": name})
+            existing_assistants.add(name.lower()); next_assistant_id += 1; added_count += 1
+        else: skipped_count += 1
+    flash(f"{added_count} köməkçi uğurla əlavə edildi. {skipped_count} sətir (təkrarlanan ad) ötürüldü.", 'success')
+    return redirect(url_for('admin_assistants'))
+
+@app.route('/admin/planners/bulk_add', methods=['POST'])
+def bulk_add_planner():
+    if not is_operator(): return redirect(url_for('index'))
+    bulk_data = request.form.get('bulk_data', ''); added_count = 0; skipped_count = 0
+    next_planner_id = _next_id(PLANNERS_DATA, 301)
+    existing_planners = {p['name'].lower() for p in PLANNERS_DATA}
+    for line in bulk_data.splitlines():
+        name = line.strip(); 
+        if not name: continue
+        if name.lower() not in existing_planners:
+            PLANNERS_DATA.append({"id": next_planner_id, "name": name})
+            existing_planners.add(name.lower()); next_planner_id += 1; added_count += 1
+        else: skipped_count += 1
+    flash(f"{added_count} planlamaçı uğurla əlavə edildi. {skipped_count} sətir (təkrarlanan ad) ötürüldü.", 'success')
+    return redirect(url_for('admin_planners'))
+
+# ----------------------------------------------------
+# 8. YALNIZ ADMİN FUNKSİYALARI (İstifadəçi İdarəetməsi)
 # ----------------------------------------------------
 @app.route('/admin/users')
 def admin_users():
-    """Admin üçün istifadəçi (operator) siyahısını və əlavə etmə formasını göstərir."""
-    if not is_admin(): return redirect(url_for('index')) # Yalnız admin girə bilər
-    # Yalnız operatorları göstər
+    if not is_admin(): return redirect(url_for('index')) 
     users_list = [user for user in USERS if user['role'] == 'user'] 
     return render_template('admin_users.html', users=users_list)
 
 @app.route('/admin/users/add', methods=['POST'])
 def add_user():
-    """Admin tərəfindən yeni istifadəçi (operator və ya admin) əlavə edilir."""
-    global next_user_id # Növbəti ID üçün qlobal dəyişəni istifadə edirik
+    global next_user_id 
     if not is_admin(): return redirect(url_for('index'))
-    
     fullname = request.form['fullname']; username = request.form['username']
     password = request.form['password']; role = request.form['role']
-    
-    # İstifadəçi adının unikal olmasını yoxla
     if get_user_by_username(username):
         flash('Bu istifadəçi adı artıq mövcuddur!', 'danger')
         return redirect(url_for('admin_users'))
-        
-    # Yeni istifadəçini əlavə et
-    USERS.append({
-        "id": next_user_id, "fullname": fullname, "username": username, 
-        "password": password, # Real tətbiqdə hash olunmalıdır!
-        "role": role 
-    })
-    next_user_id += 1 # Növbəti ID-ni artır
+    USERS.append({"id": next_user_id, "fullname": fullname, "username": username, "password": password, "role": role })
+    next_user_id += 1 
     flash(f"İstifadəçi '{fullname}' ({role}) əlavə edildi.", 'success')
     return redirect(url_for('admin_users'))
 
 @app.route('/admin/user/edit/<int:id>', methods=['GET', 'POST'])
 def edit_user(id):
-    """Admin tərəfindən mövcud istifadəçinin məlumatları redaktə edilir."""
     if not is_admin(): return redirect(url_for('index'))
     user = get_user_by_id(id)
-    if not user: return redirect(url_for('admin_users')) # İstifadəçi tapılmasa siyahıya qayıt
-    
+    if not user: return redirect(url_for('admin_users')) 
     if request.method == 'POST':
         new_username = request.form['username']
-        # Yeni istifadəçi adının başqası tərəfindən istifadə olunmadığını yoxla
         existing_user = get_user_by_username(new_username)
         if existing_user and existing_user['id'] != id:
             flash('Bu istifadəçi adı artıq başqası tərəfindən istifadə olunur!', 'danger')
-            return render_template('edit_user.html', user=user) # Formu səhvlə geri göstər
-            
-        # Məlumatları yenilə
+            return render_template('edit_user.html', user=user) 
         user['fullname'] = request.form['fullname']
         user['username'] = new_username
         user['role'] = request.form['role']
         new_password = request.form.get('password')
-        if new_password: # Əgər yeni parol daxil edilibsə onu da yenilə
-            user['password'] = new_password # Real tətbiqdə hash olunmalıdır!
-            
+        if new_password: user['password'] = new_password 
         flash(f"İstifadəçi '{user['fullname']}' məlumatları yeniləndi.", 'success')
         return redirect(url_for('admin_users'))
-        
-    # GET request üçün redaktə formasını göstər
     return render_template('edit_user.html', user=user)
 
 @app.route('/admin/user/delete/<int:id>', methods=['POST'])
 def delete_user(id):
-    """Admin tərəfindən istifadəçi (operator) silinir."""
     if not is_admin(): return redirect(url_for('index'))
     user = get_user_by_id(id)
-    # İstifadəçi varsa və admin deyilsə sil
     if user and user['role'] != 'admin': 
         name = user['fullname']
         USERS.remove(user)
@@ -588,83 +735,69 @@ def delete_user(id):
     return redirect(url_for('admin_users'))
 
 # ----------------------------------------------------
-# 8. HESABATLAR (Yalnız Admin üçün)
+# 9. HESABATLAR (Yalnız Admin üçün)
 # ----------------------------------------------------
 @app.route('/admin/reports', methods=['GET'])
 def admin_reports():
-    """Admin üçün xərc hesabatları səhifəsini göstərir (filterləmə imkanı ilə)."""
     if not is_admin(): return redirect(url_for('index'))
 
-    # Filtrləri GET requestdən oxu (tipini də təyin et)
     f_car_id = request.args.get('car_id', type=int)
     f_driver_id = request.args.get('driver_id', type=int) 
-    f_assistant_id = request.args.get('assistant_id', type=int) # Yeni
-    f_planner_id = request.args.get('planner_id', type=int)     # Yeni
-    f_user_username = request.args.get('user_username', type=str)
+    f_assistant_id = request.args.get('assistant_id', type=int) 
+    f_planner_id = request.args.get('planner_id', type=int)     
+    f_user_username = request.args.get('user_username', type=str) 
+    f_expense_type = request.args.get('expense_type', type=str) 
     f_start_date_str = request.args.get('start_date', type=str)
     f_end_date_str = request.args.get('end_date', type=str)
 
-    # Bütün xərcləri emal edib hesabat üçün hazırlayaq
     all_expenses_enriched = []
     for expense in EXPENSES:
         car = get_car_by_id(expense['car_id'])
-        user = get_user_by_username(expense['entered_by'])
-        
-        # Xərc anındakı ID-lərə görə adları tap
+        user = get_user_by_username(expense['entered_by']) 
         driver_at_expense = get_driver_by_id(expense.get('driver_id_at_expense'))
         assistant_at_expense = get_assistant_by_id(expense.get('assistant_id_at_expense'))
         planner_at_expense = get_planner_by_id(expense.get('planner_id_at_expense'))
+        all_expenses_enriched.append({
+            "expense": expense, "car": car, "user": user,
+            "driver_name_at_expense": driver_at_expense['name'] if driver_at_expense else "-",
+            "assistant_name_at_expense": assistant_at_expense['name'] if assistant_at_expense else "-",
+            "planner_name_at_expense": planner_at_expense['name'] if planner_at_expense else "-"
+        })
 
-        # Hesabatda yalnız operatorların xərcləri görünsün
-        if user and user['role'] == 'user':
-            all_expenses_enriched.append({
-                "expense": expense, "car": car, "user": user,
-                # Adları da əlavə et
-                "driver_name_at_expense": driver_at_expense['name'] if driver_at_expense else "-",
-                "assistant_name_at_expense": assistant_at_expense['name'] if assistant_at_expense else "-",
-                "planner_name_at_expense": planner_at_expense['name'] if planner_at_expense else "-"
-            })
-
-    # Filtrləmə məntiqi
     filtered_expenses = all_expenses_enriched
     if f_car_id: filtered_expenses = [e for e in filtered_expenses if e['car'] and e['car']['id'] == f_car_id]
     if f_driver_id: filtered_expenses = [e for e in filtered_expenses if e['expense'].get('driver_id_at_expense') == f_driver_id]
     if f_assistant_id: filtered_expenses = [e for e in filtered_expenses if e['expense'].get('assistant_id_at_expense') == f_assistant_id]
     if f_planner_id: filtered_expenses = [e for e in filtered_expenses if e['expense'].get('planner_id_at_expense') == f_planner_id]
     if f_user_username: filtered_expenses = [e for e in filtered_expenses if e['user'] and e['user']['username'] == f_user_username]
-    
-    # Tarix filtrləri (try-except ilə səhv formatı yoxla)
+    if f_expense_type: filtered_expenses = [e for e in filtered_expenses if e['expense']['type'] == f_expense_type] 
     if f_start_date_str:
         try: start_date = datetime.strptime(f_start_date_str, '%Y-%m-%d').date(); filtered_expenses = [e for e in filtered_expenses if e['expense']['timestamp'].date() >= start_date]
-        except ValueError: flash("Başlanğıc tarix formatı yanlışdır (GG.AA.İİİİ olmalıdır).", "warning")
+        except ValueError: flash("Başlanğıc tarix formatı yanlışdır (YYYY-MM-DD olmalıdır).", "warning")
     if f_end_date_str:
         try: end_date = datetime.strptime(f_end_date_str, '%Y-%m-%d').date(); filtered_expenses = [e for e in filtered_expenses if e['expense']['timestamp'].date() <= end_date]
-        except ValueError: flash("Bitmə tarix formatı yanlışdır (GG.AA.İİİİ olmalıdır).", "warning")
+        except ValueError: flash("Bitmə tarix formatı yanlışdır (YYYY-MM-DD olmalıdır).", "warning")
 
-    # Yekun məbləği hesabla
     total_amount = sum(e['expense']['amount'] for e in filtered_expenses)
-    
-    # Operator siyahısını filtr üçün hazırla
     operators = [user for user in USERS if user['role'] == 'user']
 
-    # Şablona göndəriləcək bütün məlumatlar
     return render_template(
         'admin_reports.html', 
-        reports=sorted(filtered_expenses, key=lambda x: x['expense']['timestamp'], reverse=True), # Tarixə görə çeşidlə
+        reports=sorted(filtered_expenses, key=lambda x: x['expense']['timestamp'], reverse=True), 
         total_amount=total_amount,
         drivers=DRIVERS_DATA, cars=CARS_DATA, operators=operators, 
-        assistants=ASSISTANTS_DATA, planners=PLANNERS_DATA, # Filtr dropdownları üçün
-        # Seçilmiş filtrləri şablona geri göndər ki, inputlarda qalsın
+        assistants=ASSISTANTS_DATA, planners=PLANNERS_DATA, 
+        expense_types=EXPENSE_TYPES, 
         selected_filters={ 
             'car_id': f_car_id, 'driver_id': f_driver_id, 'assistant_id': f_assistant_id, 'planner_id': f_planner_id, 
-            'user_username': f_user_username, 'start_date': f_start_date_str, 'end_date': f_end_date_str
+            'user_username': f_user_username, 'expense_type': f_expense_type, 
+            'start_date': f_start_date_str, 'end_date': f_end_date_str
         }
     )
 
 # ----------------------------------------------------
-# 9. TƏTBİQİ BAŞLATMA (Development üçün)
+# 10. TƏTBİQİ BAŞLATMA (Development üçün)
 # ----------------------------------------------------
 if __name__ == '__main__':
-    # debug=True development zamanı avtomatik yenilənmə və daha detallı xəta mesajları verir
-    # Productionda debug=False olmalıdır!
+    # relativedelta üçün kitabxananı import etməyi unutmayın: pip install python-dateutil
     app.run(debug=True)
