@@ -139,12 +139,12 @@
                         <th>Növ</th> <th class="text-end">Məbləğ (AZN)</th>
                         <th class="text-end">Litr</th>
                         <th>Açıqlama</th>
-                    </tr>
+                        <th class="text-center">Sil</th> </tr>
                 </thead>
                 <tbody>
                     {% if not reports %}
                     <tr>
-                        <td colspan="10" class="text-center text-muted">Axtarışa uyğun nəticə tapılmadı.</td> 
+                        <td colspan="11" class="text-center text-muted">Axtarışa uyğun nəticə tapılmadı.</td> 
                     </tr>
                     {% endif %}
                     
@@ -172,12 +172,19 @@
                         <td class="text-end text-danger fw-bold">{{ "%.2f"|format(item.expense.amount) }}</td>
                         <td class="text-end">{{ item.expense.litr if item.expense.litr > 0 else '-' }}</td>
                         <td>{{ item.expense.description }}</td>
+                        <td class="text-center">
+                            <form method="POST" action="{{ url_for('delete_expense', id=item.expense.expense_id) }}" onsubmit="return confirm('Bu xərci silmək istədiyinizə əminsiniz?');">
+                                <button type="submit" class="btn btn-sm btn-outline-danger" title="Sil">
+                                    <i class="fas fa-trash-alt"></i>
+                                </button>
+                            </form>
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>
                 <tfoot>
                     <tr class="bg-light fw-bold">
-                        <td colspan="7" class="text-end">Yekun Cəm:</td> 
+                        <td colspan="8" class="text-end">Yekun Cəm:</td> 
                         <td class="text-end text-danger fs-5">{{ "%.2f"|format(total_amount) }} AZN</td>
                         <td colspan="2"></td> 
                     </tr>

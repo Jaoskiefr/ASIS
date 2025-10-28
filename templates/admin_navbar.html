@@ -22,11 +22,16 @@
           </a>
         </li>
         <li class="nav-item">
-          <a class="nav-link {% if request.path.startswith(url_for('admin_reports')) %}active{% endif %}" href="{{ url_for('admin_reports') }}">
+          <a class="nav-link {% if request.path == url_for('admin_reports') %}active{% endif %}" href="{{ url_for('admin_reports') }}">
             <i class="fas fa-chart-pie me-1"></i> Hesabatlar
           </a>
         </li>
-      </ul>
+        <li class="nav-item">
+          <a class="nav-link {% if request.path == url_for('admin_deleted_reports') %}active{% endif %}" href="{{ url_for('admin_deleted_reports') }}">
+            <i class="fas fa-archive me-1"></i> Silinən Xərclər
+          </a>
+        </li>
+        </ul>
 
       <div class="d-flex align-items-center gap-2">
         {% if session.get('fullname') %}

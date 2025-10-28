@@ -49,19 +49,22 @@ CARS_DATA = [
      "brand": "Ford", "model_name": "Transit", "category": "Minik Avtomobili", "assistant_id": 201, "planner_id": 301, "notes": ""},
 ]
 
-# Xərc Məlumatları
+# Xərc Məlumatları - YENİLƏNİB (expense_id əlavə edildi)
 EXPENSES = [
-    {"car_id": 1, "amount": 85.50, "type": "Yanacaq", "litr": 15.0, "description": "AI-92 - Qeyd", "entered_by": "operator", "timestamp": datetime(2025, 10, 20, 9, 30),
+    {"expense_id": 1, "car_id": 1, "amount": 85.50, "type": "Yanacaq", "litr": 15.0, "description": "AI-92 - Qeyd", "entered_by": "operator", "timestamp": datetime(2025, 10, 20, 9, 30),
      "driver_id_at_expense": 101, "assistant_id_at_expense": None, "planner_id_at_expense": None},
-    {"car_id": 2, "amount": 40.00, "type": "Avtoyuma", "litr": 0, "description": "Yuma xərci", "entered_by": "admin", "timestamp": datetime(2025, 10, 21, 14, 15),
+    {"expense_id": 2, "car_id": 2, "amount": 40.00, "type": "Avtoyuma", "litr": 0, "description": "Yuma xərci", "entered_by": "admin", "timestamp": datetime(2025, 10, 21, 14, 15),
      "driver_id_at_expense": 102, "assistant_id_at_expense": None, "planner_id_at_expense": 301}, 
-    {"car_id": 1, "amount": 250.00, "type": "Təmir", "litr": 0, "description": "Yağ dəyişimi", "entered_by": "operator", "timestamp": datetime(2025, 10, 22, 17, 0),
+    {"expense_id": 3, "car_id": 1, "amount": 250.00, "type": "Təmir", "litr": 0, "description": "Yağ dəyişimi", "entered_by": "operator", "timestamp": datetime(2025, 10, 22, 17, 0),
      "driver_id_at_expense": 101, "assistant_id_at_expense": None, "planner_id_at_expense": None},
-    {"car_id": 3, "amount": 100.00, "type": "Yanacaq", "litr": 20.0, "description": "AI-95 - Qeyd 2", "entered_by": "operator", "timestamp": datetime(2025, 10, 25, 16, 19),
+    {"expense_id": 4, "car_id": 3, "amount": 100.00, "type": "Yanacaq", "litr": 20.0, "description": "AI-95 - Qeyd 2", "entered_by": "operator", "timestamp": datetime(2025, 10, 25, 16, 19),
      "driver_id_at_expense": None, "assistant_id_at_expense": 201, "planner_id_at_expense": 301},
-    {"car_id": 2, "amount": 50.00, "type": "Cərimə", "litr": 0, "description": "Sürət həddi", "entered_by": "admin", "timestamp": datetime(2025, 10, 27, 11, 00),
+    {"expense_id": 5, "car_id": 2, "amount": 50.00, "type": "Cərimə", "litr": 0, "description": "Sürət həddi", "entered_by": "admin", "timestamp": datetime(2025, 10, 27, 11, 00),
      "driver_id_at_expense": 102, "assistant_id_at_expense": None, "planner_id_at_expense": 301}, 
 ]
+
+# YENİ: Silinən xərcləri saxlamaq üçün
+DELETED_EXPENSES = []
 
 # Xərc növlərinin siyahısı (filtr üçün)
 EXPENSE_TYPES = ["Yanacaq", "Təmir", "Cərimə", "Avtoyuma", "Yemək", "Digər"]
@@ -298,7 +301,12 @@ def add_expense():
         assistant_id_at_expense = car.get('assistant_id')
         planner_id_at_expense = car.get('planner_id')
 
+    # YENİ: Həm aktiv, həm də silinmiş xərclər arasından ən böyük ID-ni tap
+    all_expense_ids = [e['expense_id'] for e in EXPENSES] + [e['expense_id'] for e in DELETED_EXPENSES]
+    next_id = (max(all_expense_ids) + 1) if all_expense_ids else 1
+
     new_expense = {
+        "expense_id": next_id, # YENİLƏNDİ
         "car_id": int(car_id), 
         "type": expense_type,  
         "amount": float(amount), 
@@ -353,6 +361,7 @@ def admin_drivers():
     drivers_processed = []
     for driver in DRIVERS_DATA:
         driver_copy = driver.copy() 
+        # Yalnız aktiv EXPENSES siyahısını yoxlayır
         driver_copy['has_expenses'] = any(e.get('driver_id_at_expense') == driver_copy['id'] for e in EXPENSES)
         driver_copy['experience_str'] = calculate_experience(driver_copy.get('start_date'))
         drivers_processed.append(driver_copy)
@@ -365,6 +374,7 @@ def admin_cars():
     cars_with_expense_info = []
     for car in CARS_DATA: 
         car_copy = car.copy()
+        # Yalnız aktiv EXPENSES siyahısını yoxlayır
         car_copy['has_expenses'] = any(e['car_id'] == car_copy['id'] for e in EXPENSES)
         cars_with_expense_info.append(car_copy)
     return render_template('admin_cars.html', cars=cars_with_expense_info, 
@@ -376,6 +386,7 @@ def admin_assistants():
     assistants_with_expense_info = []
     for a in ASSISTANTS_DATA:
         a_copy = a.copy()
+        # Yalnız aktiv EXPENSES siyahısını yoxlayır
         a_copy['has_expenses'] = any(e.get('assistant_id_at_expense') == a_copy['id'] for e in EXPENSES)
         assistants_with_expense_info.append(a_copy)
     return render_template('admin_assistants.html', assistants=assistants_with_expense_info)
@@ -404,8 +415,9 @@ def edit_assistant(aid):
 @app.route('/admin/assistant/delete/<int:aid>', methods=['POST'])
 def delete_assistant(aid):
     if not is_operator(): return redirect(url_for('index'))
+    # Yalnız aktiv EXPENSES siyahısını yoxlayır
     if any(e.get('assistant_id_at_expense') == aid for e in EXPENSES):
-        flash('Bu köməkçi silinə bilməz! Köməkçiyə aid xərc məlumatı mövcuddur.', 'danger')
+        flash('Bu köməkçi silinə bilməz! Köməkçiyə aid aktiv xərc məlumatı mövcuddur.', 'danger')
         return redirect(url_for('admin_assistants')) 
     assistant = get_assistant_by_id(aid)
     if assistant: 
@@ -421,6 +433,7 @@ def admin_planners():
     planners_with_expense_info = []
     for p in PLANNERS_DATA:
         p_copy = p.copy()
+        # Yalnız aktiv EXPENSES siyahısını yoxlayır
         p_copy['has_expenses'] = any(e.get('planner_id_at_expense') == p_copy['id'] for e in EXPENSES)
         planners_with_expense_info.append(p_copy)
     return render_template('admin_planners.html', planners=planners_with_expense_info)
@@ -449,8 +462,9 @@ def edit_planner(pid):
 @app.route('/admin/planner/delete/<int:pid>', methods=['POST'])
 def delete_planner(pid):
     if not is_operator(): return redirect(url_for('index'))
+    # Yalnız aktiv EXPENSES siyahısını yoxlayır
     if any(e.get('planner_id_at_expense') == pid for e in EXPENSES):
-        flash('Bu planlamaçı silinə bilməz! Planlamaçıya aid xərc məlumatı mövcuddur.', 'danger')
+        flash('Bu planlamaçı silinə bilməz! Planlamaçıya aid aktiv xərc məlumatı mövcuddur.', 'danger')
         return redirect(url_for('admin_planners')) 
     planner = get_planner_by_id(pid)
     if planner: 
@@ -516,8 +530,9 @@ def add_car():
 @app.route('/admin/driver/delete/<int:id>', methods=['POST'])
 def delete_driver(id):
     if not is_operator(): return redirect(url_for('index'))
+    # Yalnız aktiv EXPENSES siyahısını yoxlayır
     if any(e.get('driver_id_at_expense') == id for e in EXPENSES):
-        flash('Bu sürücü silinə bilməz! Sürücüyə aid xərc məlumatı mövcuddur.', 'danger')
+        flash('Bu sürücü silinə bilməz! Sürücüyə aid aktiv xərc məlumatı mövcuddur.', 'danger')
         return redirect(url_for('admin_drivers')) 
     driver = get_driver_by_id(id)
     if driver: 
@@ -535,8 +550,9 @@ def delete_car(id):
     if not car:
         flash('Avtomobil tapılmadı.', 'danger')
         return redirect(redirect_url) 
+    # Yalnız aktiv EXPENSES siyahısını yoxlayır
     if any(e['car_id'] == id for e in EXPENSES):
-        flash('Bu avtomobil silinə bilməz! Avtomobilə aid xərc məlumatı mövcuddur.', 'danger')
+        flash('Bu avtomobil silinə bilməz! Avtomobilə aid aktiv xərc məlumatı mövcuddur.', 'danger')
     else:
         car_number = car['car_number']
         CARS_DATA.remove(car)
@@ -751,6 +767,7 @@ def admin_reports():
     f_end_date_str = request.args.get('end_date', type=str)
 
     all_expenses_enriched = []
+    # YALNIZ AKTİV EXPENSES SİYAHISINDAN GÖSTƏRİR
     for expense in EXPENSES:
         car = get_car_by_id(expense['car_id'])
         user = get_user_by_username(expense['entered_by']) 
@@ -796,7 +813,82 @@ def admin_reports():
     )
 
 # ----------------------------------------------------
-# 10. TƏTBİQİ BAŞLATMA (Development üçün)
+# 10. YENİ ADMİN FUNKSİYALARI (XƏRC SİLMƏ VƏ BƏRPA)
+# ----------------------------------------------------
+
+@app.route('/admin/expense/delete/<int:id>', methods=['POST'])
+def delete_expense(id):
+    """Xərci aktiv siyahıdan silib arxivə (DELETED_EXPENSES) əlavə edir."""
+    if not is_admin(): return redirect(url_for('index'))
+    
+    expense_to_delete = None
+    for expense in EXPENSES:
+        if expense['expense_id'] == id:
+            expense_to_delete = expense
+            break
+    
+    if expense_to_delete:
+        EXPENSES.remove(expense_to_delete)
+        # Silinmə haqqında məlumat əlavə et
+        expense_to_delete['deleted_by_user'] = session.get('fullname', 'unknown_admin')
+        expense_to_delete['deleted_at'] = datetime.now()
+        DELETED_EXPENSES.append(expense_to_delete)
+        flash(f"Xərc (ID: {id}) uğurla silindi və arxivə əlavə olundu.", 'success')
+    else:
+        flash(f"Xərc (ID: {id}) aktiv siyahıda tapılmadı.", 'danger')
+        
+    return redirect(url_for('admin_reports'))
+
+@app.route('/admin/expense/restore/<int:id>', methods=['POST'])
+def restore_expense(id):
+    """Xərci arxivdən (DELETED_EXPENSES) geri qaytarır."""
+    if not is_admin(): return redirect(url_for('index'))
+    
+    expense_to_restore = None
+    for expense in DELETED_EXPENSES:
+        if expense['expense_id'] == id:
+            expense_to_restore = expense
+            break
+    
+    if expense_to_restore:
+        DELETED_EXPENSES.remove(expense_to_restore)
+        # Silinmə məlumatlarını təmizlə
+        expense_to_restore.pop('deleted_by_user', None)
+        expense_to_restore.pop('deleted_at', None)
+        EXPENSES.append(expense_to_restore)
+        flash(f"Xərc (ID: {id}) uğurla bərpa edildi.", 'success')
+    else:
+        flash(f"Xərc (ID: {id}) arxivdə tapılmadı.", 'danger')
+        
+    return redirect(url_for('admin_deleted_reports'))
+
+@app.route('/admin/deleted_reports')
+def admin_deleted_reports():
+    """Silinmiş xərcləri göstərən səhifə."""
+    if not is_admin(): return redirect(url_for('index'))
+
+    # Silinmiş xərcləri də hesabat üçün zənginləşdiririk
+    all_expenses_enriched = []
+    for expense in DELETED_EXPENSES:
+        car = get_car_by_id(expense['car_id'])
+        user = get_user_by_username(expense['entered_by']) 
+        driver_at_expense = get_driver_by_id(expense.get('driver_id_at_expense'))
+        assistant_at_expense = get_assistant_by_id(expense.get('assistant_id_at_expense'))
+        planner_at_expense = get_planner_by_id(expense.get('planner_id_at_expense'))
+        all_expenses_enriched.append({
+            "expense": expense, "car": car, "user": user,
+            "driver_name_at_expense": driver_at_expense['name'] if driver_at_expense else "-",
+            "assistant_name_at_expense": assistant_at_expense['name'] if assistant_at_expense else "-",
+            "planner_name_at_expense": planner_at_expense['name'] if planner_at_expense else "-"
+        })
+    
+    return render_template(
+        'admin_deleted_reports.html', 
+        reports=sorted(all_expenses_enriched, key=lambda x: x['expense']['deleted_at'], reverse=True)
+    )
+
+# ----------------------------------------------------
+# 11. TƏTBİQİ BAŞLATMA (Development üçün)
 # ----------------------------------------------------
 if __name__ == '__main__':
     # relativedelta üçün kitabxananı import etməyi unutmayın: pip install python-dateutil
