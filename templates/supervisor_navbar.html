@@ -1,0 +1,46 @@
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+  <div class="container-fluid">
+    <a class="navbar-brand d-flex align-items-center" href="{{ url_for('supervisor_dashboard') }}">
+      <i class="fas fa-cubes me-2"></i> ASIS (Supervisor)
+    </a>
+
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#asisNavbar" aria-controls="asisNavbar" aria-expanded="false" aria-label="Toggle navigation">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+
+    <div class="collapse navbar-collapse" id="asisNavbar">
+      <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+        <li class="nav-item">
+          <a class="nav-link {% if request.path == url_for('supervisor_dashboard') %}active{% endif %}" href="{{ url_for('supervisor_dashboard') }}">
+            <i class="fas fa-home me-1"></i> Əsas Panel
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link {% if request.path.startswith(url_for('supervisor_operations')) %}active{% endif %}" href="{{ url_for('supervisor_operations') }}">
+            <i class="fas fa-users-cog me-1"></i> Əməliyyatlar
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link {% if request.path == url_for('supervisor_reports') %}active{% endif %}" href="{{ url_for('supervisor_reports') }}">
+            <i class="fas fa-clipboard-list me-1"></i> Raporlar
+          </a>
+        </li>
+      </ul>
+
+      <div class="d-flex align-items-center gap-2">
+        {% if session.get('fullname') %}
+          <span class="navbar-text text-white-50">
+            {{ session['fullname'] }} (Rol: <span class="text-warning fw-bold">Supervisor</span>)
+          </span>
+          <a class="btn btn-sm btn-outline-danger" href="{{ url_for('logout') }}">
+            <i class="fas fa-sign-out-alt me-1"></i> Çıxış
+          </a>
+        {% else %}
+          <a class="btn btn-sm btn-outline-light" href="{{ url_for('login') }}">
+            <i class="fas fa-sign-in-alt me-1"></i> Giriş
+          </a>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</nav>

@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="az">
+<head>
+    <meta charset="UTF-8">
+    <title>ASİS - Audit Raporları</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <style>
+        body {
+            background-image: url("{{ url_for('static', filename='bg.jpg') }}");
+            background-size: cover; background-position: center; background-attachment: fixed; min-height: 100vh;
+        }
+        .content-container {
+            background-color: rgba(255, 255, 255, 0.95); border-radius: 8px; padding: 20px; margin-top: 20px; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
+        }
+        .table th, .table td { font-size: 0.85rem; vertical-align: middle; }
+        .table-success-light { background-color: #d1e7dd !important; }
+        .table-danger-light { background-color: #f8d7da !important; }
+    </style>
+</head>
+<body>
+    {% include 'supervisor_navbar.html' %} 
+    
+    <div class="container-fluid mt-4 content-container">
+        
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category or 'info' }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <h1 class="text-success"><i class="fas fa-clipboard-list"></i> Audit Raporları</h1>
+        <hr>
+
+        <div class="card mb-4">
+            <div class="card-header bg-dark text-white">
+                <i class="fas fa-filter"></i> Filtrlər
+            </div>
+            <div class="card-body">
+                <form method="GET" action="{{ url_for('supervisor_reports') }}">
+                    <div class="row align-items-end">
+                        <div class="col-md-2 mb-3">
+                            <label class="form-label">İstifadəçiyə görə</label>
+                            <select class="form-select form-select-sm" name="username">
+                                <option value="">Bütün İstifadəçilər</option>
+                                {% for username in all_usernames %}
+                                    <option value="{{ username }}" {% if selected_filters.username == username %}selected{% endif %}>
+                                        {{ username }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <label class="form-label">Kompyuter Adı / IP</label>
+                            <select class="form-select form-select-sm" name="hostname">
+                                <option value="">Bütün Kompyuterlər</option>
+                                {% for hostname in all_hostnames %}
+                                    <option value="{{ hostname }}" {% if selected_filters.hostname == hostname %}selected{% endif %}>
+                                        {{ hostname }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-2 mb-3">
+                            <label class="form-label">Əməliyyata görə</label>
+                            <select class="form-select form-select-sm" name="action">
+                                <option value="">Bütün Əməliyyatlar</option>
+                                {% for action in all_actions %}
+                                    <option value="{{ action }}" {% if selected_filters.action == action %}selected{% endif %}>
+                                        {{ action }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-1 mb-3">
+                            <label class="form-label">Status</label>
+                            <select class="form-select form-select-sm" name="status">
+                                <option value="">Bütün</option>
+                                <option value="success" {% if selected_filters.status == 'success' %}selected{% endif %}>Uğurlu</option>
+                                <option value="failure" {% if selected_filters.status == 'failure' %}selected{% endif %}>Xəta</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2 mb-3">
+                            <label class="form-label">Başlanğıc Tarixi</label>
+                            <input type="date" class="form-control form-control-sm" name="start_date" value="{{ selected_filters.start_date or '' }}">
+                        </div>
+                        <div class="col-md-2 mb-3">
+                            <label class="form-label">Bitmə Tarixi</label>
+                            <input type="date" class="form-control form-control-sm" name="end_date" value="{{ selected_filters.end_date or '' }}">
+                        </div>
+                        <div class="col-md-12 mb-3 d-flex justify-content-end gap-2"> 
+                            <a href="{{ url_for('supervisor_reports') }}" class="btn btn-sm btn-secondary"><i class="fas fa-times"></i> Təmizlə</a>
+                            <button type="submit" class="btn btn-sm btn-primary"><i class="fas fa-search"></i> Axtar</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <h4 class="mt-4">Nəticələr ({{ reports|length }} qeyd tapıldı)</h4>
+        <div class="table-responsive">
+            <table class="table table-striped table-bordered table-hover table-sm"> 
+                <thead class="bg-dark text-white">
+                    <tr>
+                        <th style="width: 150px;">Tarix / Saat</th>
+                        <th style="width: 120px;">İstifadəçi</th>
+                        <th style="width: 180px;">Kompyuter Adı / IP</th> <th style="width: 180px;">Əməliyyat</th>
+                        <th>Detallar</th>
+                        <th style="width: 80px;" class="text-center">Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if not reports %}
+                    <tr>
+                        <td colspan="6" class="text-center text-muted py-3">Axtarışa uyğun nəticə tapılmadı.</td> 
+                    </tr>
+                    {% endif %}
+                    
+                    {% for item in reports %}
+                    <tr class="{% if item.status == 'success' %}table-success-light{% elif item.status == 'failure' %}table-danger-light{% endif %}">
+                        <td>{{ item.timestamp.strftime('%d.%m.%Y %H:%M:%S') }}</td>
+                        <td>{{ item.username }}</td>
+                        
+                        <td>
+                            <strong>{{ item.hostname }}</strong>
+                            {% if item.hostname != item.ip %}
+                                <br><small class="text-muted">({{ item.ip }})</small>
+                            {% endif %}
+                        </td>
+                        
+                        <td><strong>{{ item.action }}</strong></td>
+                        <td>{{ item.details }}</td>
+                        <td class="text-center">
+                            {% if item.status == 'success' %}<span class="badge bg-success">Uğurlu</span>
+                            {% elif item.status == 'failure' %}<span class="badge bg-danger">Xəta</span>
+                            {% else %}<span class="badge bg-secondary">{{ item.status }}</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
