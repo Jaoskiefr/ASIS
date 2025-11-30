@@ -207,6 +207,133 @@ def get_planner_by_id(pid):
         conn.close()
     return row
 
+def get_all_drivers():
+    """Bütün sürücüləri DB-dən gətirir."""
+    conn = get_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                SELECT id, name, license_no, phone, start_date
+                FROM drivers
+                ORDER BY name
+            """)
+            rows = cursor.fetchall()
+    finally:
+        conn.close()
+    return rows
+
+
+def get_all_assistants():
+    """Bütün köməkçiləri DB-dən gətirir."""
+    conn = get_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                SELECT id, name
+                FROM assistants
+                ORDER BY name
+            """)
+            rows = cursor.fetchall()
+    finally:
+        conn.close()
+    return rows
+
+
+def get_all_planners():
+    """Bütün planlamaçıları DB-dən gətirir."""
+    conn = get_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                SELECT id, name
+                FROM planners
+                ORDER BY name
+            """)
+            rows = cursor.fetchall()
+    finally:
+        conn.close()
+    return rows
+
+
+def get_all_cars():
+    """Bütün avtomobilləri DB-dən gətirir."""
+    conn = get_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                SELECT
+                    id,
+                    car_number,
+                    model,
+                    brand,
+                    model_name,
+                    category,
+                    driver_id,
+                    assistant_id,
+                    planner_id,
+                    notes
+                FROM cars
+                ORDER BY car_number
+            """)
+            rows = cursor.fetchall()
+    finally:
+        conn.close()
+    return rows
+
+
+def get_operators():
+    """Yalnız operatorları (role='user') gətirir."""
+    conn = get_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                SELECT id, fullname, username, role, is_active
+                FROM users
+                WHERE role = 'user'
+                ORDER BY fullname
+            """)
+            rows = cursor.fetchall()
+    finally:
+        conn.close()
+
+    return [
+        {
+            "id": r["id"],
+            "fullname": r["fullname"],
+            "username": r["username"],
+            "role": r["role"],
+            "is_active": bool(r["is_active"]),
+        }
+        for r in rows
+    ]
+
+
+def get_all_users():
+    """Bütün istifadəçiləri gətirir (supervisor üçün operations səhifəsində istifadə olunur)."""
+    conn = get_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                SELECT id, fullname, username, role, is_active
+                FROM users
+                ORDER BY fullname
+            """)
+            rows = cursor.fetchall()
+    finally:
+        conn.close()
+
+    return [
+        {
+            "id": r["id"],
+            "fullname": r["fullname"],
+            "username": r["username"],
+            "role": r["role"],
+            "is_active": bool(r["is_active"]),
+        }
+        for r in rows
+    ]
+
+
 def _derive_brand_and_model(car):
     brand = car.get('brand') or ""
     model_name = car.get('model_name') or ""
@@ -408,18 +535,31 @@ def index():
     # === ADMİN DASHBOARD MƏLUMATLARI ===
     if session['role'] == 'admin':
         log_action('VIEW_PAGE', 'Admin Dashboarduna baxış', 'success')
-                conn = get_connection()
+
+        conn = get_connection()
         try:
             with conn.cursor() as cursor:
+                # operator sayı
                 cursor.execute("SELECT COUNT(*) AS cnt FROM users WHERE role = 'user'")
                 total_operator_count = cursor.fetchone()["cnt"]
+
+                # maşın sayı
+                cursor.execute("SELECT COUNT(*) AS cnt FROM cars")
+                total_car_count = cursor.fetchone()["cnt"]
+
+                # sürücü sayı
+                cursor.execute("SELECT COUNT(*) AS cnt FROM drivers")
+                total_driver_count = cursor.fetchone()["cnt"]
+
+                # köməkçi sayı
+                cursor.execute("SELECT COUNT(*) AS cnt FROM assistants")
+                total_assistant_count = cursor.fetchone()["cnt"]
+
+                # planlamaçı sayı
+                cursor.execute("SELECT COUNT(*) AS cnt FROM planners")
+                total_planner_count = cursor.fetchone()["cnt"]
         finally:
             conn.close()
-
-        total_car_count = len(CARS_DATA)
-        total_driver_count = len(DRIVERS_DATA)
-        total_assistant_count = len(ASSISTANTS_DATA)
-        total_planner_count = len(PLANNERS_DATA)
         
         now = datetime.now()
         current_month_expenses = [
@@ -457,14 +597,21 @@ def index():
     # === OPERATOR DASHBOARD MƏLUMATLARI ===
     log_action('VIEW_PAGE', 'Operator Dashboarduna baxış', 'success')
     dashboard_data = get_dashboard_data()
+
+    # Kataloqları artıq DB-dən veririk
+    drivers = get_all_drivers()
+    assistants = get_all_assistants()
+    planners = get_all_planners()
+
     return render_template(
         'operator_dashboard.html', 
         user_role=session['role'], 
         cars=dashboard_data, 
-        drivers=DRIVERS_DATA,
-        assistants=ASSISTANTS_DATA,
-        planners=PLANNERS_DATA
+        drivers=drivers,
+        assistants=assistants,
+        planners=planners
     )
+
 
 # ----------------------------------------------------
 # 6. OPERATOR FUNKSİYALARI (CRUD Əməliyyatları)
@@ -563,47 +710,108 @@ def admin_drivers():
 @operator_required
 def admin_cars():
     log_action('VIEW_PAGE', 'Avtomobil idarəetmə səhifəsinə baxış', 'success')
+
+    cars = get_all_cars()
     cars_with_expense_info = []
-    for car in CARS_DATA: 
-        car_copy = car.copy()
-        car_copy['has_expenses'] = any(e['car_id'] == car_copy['id'] for e in EXPENSES)
-        cars_with_expense_info.append(car_copy)
-    return render_template('admin_cars.html', cars=cars_with_expense_info, 
-                           drivers=DRIVERS_DATA, assistants=ASSISTANTS_DATA, planners=PLANNERS_DATA) 
+    for car in cars:
+        c = dict(car)
+        c['has_expenses'] = any(e['car_id'] == c['id'] for e in EXPENSES)
+        cars_with_expense_info.append(c)
+
+    drivers = get_all_drivers()
+    assistants = get_all_assistants()
+    planners = get_all_planners()
+
+    return render_template(
+        'admin_cars.html',
+        cars=cars_with_expense_info,
+        drivers=drivers,
+        assistants=assistants,
+        planners=planners
+    )
+
 
 @app.route('/admin/assistants')
 @operator_required
 def admin_assistants():
     log_action('VIEW_PAGE', 'Köməkçi idarəetmə səhifəsinə baxış', 'success')
+
+    assistants = get_all_assistants()
     assistants_with_expense_info = []
-    for a in ASSISTANTS_DATA:
-        a_copy = a.copy()
+    for a in assistants:
+        a_copy = dict(a)
         a_copy['has_expenses'] = any(e.get('assistant_id_at_expense') == a_copy['id'] for e in EXPENSES)
         assistants_with_expense_info.append(a_copy)
+
     return render_template('admin_assistants.html', assistants=assistants_with_expense_info)
+
 
 @app.route('/admin/assistants/add', methods=['POST'])
 @operator_required
 def add_assistant():
     name = request.form['name'].strip()
-    if name: 
-        ASSISTANTS_DATA.append({"id": _next_id(ASSISTANTS_DATA, 201), "name": name})
-        log_action('ADD_ASSISTANT', f"Yeni köməkçi əlavə edildi: {name}", 'success')
-        flash(f"Köməkçi '{name}' əlavə edildi.", 'success')
+    if not name:
+        flash("Köməkçi adı boş ola bilməz.", "danger")
+        return redirect(url_for('admin_assistants'))
+
+    conn = get_connection()
+    try:
+        with conn.cursor() as cursor:
+            # təkrarlanan ad (case-insensitive)
+            cursor.execute("SELECT id FROM assistants WHERE LOWER(name) = LOWER(%s)", (name,))
+            if cursor.fetchone():
+                flash("Bu adda köməkçi artıq mövcuddur.", "danger")
+                return redirect(url_for('admin_assistants'))
+
+            cursor.execute("INSERT INTO assistants (name) VALUES (%s)", (name,))
+        conn.commit()
+    finally:
+        conn.close()
+
+    log_action('ADD_ASSISTANT', f"Yeni köməkçi əlavə edildi: {name}", 'success')
+    flash(f"Köməkçi '{name}' əlavə edildi.", 'success')
     return redirect(url_for('admin_assistants'))
+
 
 @app.route('/admin/assistant/edit/<int:aid>', methods=['GET', 'POST'])
 @operator_required
 def edit_assistant(aid):
     assistant = get_assistant_by_id(aid)
-    if not assistant: return redirect(url_for('admin_assistants'))
-    if request.method == 'POST': 
-        old_name = assistant['name']
-        assistant['name'] = request.form['name'].strip()
-        log_action('EDIT_ASSISTANT', f"Köməkçi adı dəyişdirildi: '{old_name}' -> '{assistant['name']}' (ID: {aid})", 'success')
-        flash(f"Köməkçi '{old_name}' adı '{assistant['name']}' olaraq dəyişdirildi.", 'success')
+    if not assistant:
         return redirect(url_for('admin_assistants'))
+
+    if request.method == 'POST':
+        new_name = request.form['name'].strip()
+        if not new_name:
+            flash("Köməkçi adı boş ola bilməz.", "danger")
+            return render_template('edit_assistant.html', assistant=assistant)
+
+        conn = get_connection()
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    SELECT id FROM assistants
+                    WHERE LOWER(name) = LOWER(%s) AND id <> %s
+                """, (new_name, aid))
+                if cursor.fetchone():
+                    flash("Bu adda köməkçi artıq mövcuddur.", "danger")
+                    return render_template('edit_assistant.html', assistant=assistant)
+
+                cursor.execute("""
+                    UPDATE assistants
+                    SET name = %s
+                    WHERE id = %s
+                """, (new_name, aid))
+            conn.commit()
+        finally:
+            conn.close()
+
+        log_action('EDIT_ASSISTANT', f"Köməkçi adı dəyişdirildi: '{assistant['name']}' -> '{new_name}' (ID: {aid})", 'success')
+        flash(f"Köməkçi '{assistant['name']}' adı '{new_name}' olaraq dəyişdirildi.", 'success')
+        return redirect(url_for('admin_assistants'))
+
     return render_template('edit_assistant.html', assistant=assistant)
+
 
 @app.route('/admin/assistant/delete/<int:aid>', methods=['POST'])
 @operator_required
@@ -611,14 +819,29 @@ def delete_assistant(aid):
     if any(e.get('assistant_id_at_expense') == aid for e in EXPENSES):
         log_action('DELETE_ASSISTANT_FAILURE', f"Köməkçi silinə bilmədi (xərc mövcuddur): ID {aid}", 'failure')
         flash('Bu köməkçi silinə bilməz! Köməkçiyə aid aktiv xərc məlumatı mövcuddur.', 'danger')
-        return redirect(url_for('admin_assistants')) 
+        return redirect(url_for('admin_assistants'))
+
     assistant = get_assistant_by_id(aid)
-    if assistant: 
+    if assistant:
         name = assistant['name']
-        ASSISTANTS_DATA.remove(assistant)
-        [car.update({'assistant_id': None}) for car in CARS_DATA if car.get('assistant_id') == aid]
+
+        conn = get_connection()
+        try:
+            with conn.cursor() as cursor:
+                # maşınlarda bu köməkçi varsa, null et
+                cursor.execute("""
+                    UPDATE cars
+                    SET assistant_id = NULL
+                    WHERE assistant_id = %s
+                """, (aid,))
+                cursor.execute("DELETE FROM assistants WHERE id = %s", (aid,))
+            conn.commit()
+        finally:
+            conn.close()
+
         log_action('DELETE_ASSISTANT_SUCCESS', f"Köməkçi silindi: {name} (ID: {aid})", 'success')
         flash(f"Köməkçi '{name}' silindi.", 'success')
+
     return redirect(url_for('admin_assistants'))
 
 @app.route('/admin/planners')
@@ -721,21 +944,50 @@ def add_driver():
 @app.route('/admin/cars/add', methods=['POST'])
 @operator_required
 def add_car():
-    car_number = request.form['car_number']; model = request.form['model']
+    car_number = request.form['car_number'].strip()
+    model = request.form['model'].strip()
     driver_id = int(request.form['driver_id']) if request.form.get('driver_id') else None
     assistant_id = int(request.form['assistant_id']) if request.form.get('assistant_id') else None
     planner_id = int(request.form['planner_id']) if request.form.get('planner_id') else None
-    
-    new_id = max([c['id'] for c in CARS_DATA] + [0]) + 1 
-    
-    CARS_DATA.append({
-        "id": new_id, "driver_id": driver_id, "assistant_id": assistant_id, "planner_id": planner_id,
-        "car_number": car_number, "model": model, 
-        "brand": "", "model_name": "", "category": "", "notes": "" 
-    })
+
+    if not car_number or not model:
+        flash("Avtomobil nömrəsi və model boş ola bilməz.", "danger")
+        return redirect(url_for('admin_cars'))
+
+    conn = get_connection()
+    try:
+        with conn.cursor() as cursor:
+            # eyni nömrə var?
+            cursor.execute("SELECT id FROM cars WHERE car_number = %s", (car_number,))
+            if cursor.fetchone():
+                flash(f"'{car_number}' nömrəli avtomobil artıq mövcuddur.", "danger")
+                return redirect(url_for('admin_cars'))
+
+            cursor.execute("""
+                INSERT INTO cars (
+                    car_number, model, brand, model_name, category,
+                    driver_id, assistant_id, planner_id, notes
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """, (
+                car_number,
+                model,
+                "",  # brand
+                "",  # model_name
+                "",  # category
+                driver_id,
+                assistant_id,
+                planner_id,
+                ""   # notes
+            ))
+        conn.commit()
+    finally:
+        conn.close()
+
     log_action('ADD_CAR_SUCCESS', f"Yeni avtomobil əlavə edildi: {car_number}", 'success')
     flash(f"Avtomobil '{car_number}' əlavə edildi.", 'success')
     return redirect(url_for('admin_cars'))
+
 
 @app.route('/admin/driver/delete/<int:id>', methods=['POST'])
 @operator_required
@@ -771,21 +1023,34 @@ def delete_driver(id):
 
 @app.route('/admin/car/delete/<int:id>', methods=['POST'])
 @operator_required
+@app.route('/admin/car/delete/<int:id>', methods=['POST'])
+@operator_required
 def delete_car(id):
     redirect_url = request.referrer or url_for('index')
     car = get_car_by_id(id)
     if not car:
         flash('Avtomobil tapılmadı.', 'danger')
-        return redirect(redirect_url) 
+        return redirect(redirect_url)
+
     if any(e['car_id'] == id for e in EXPENSES):
         log_action('DELETE_CAR_FAILURE', f"Avtomobil silinə bilmədi (xərc mövcuddur): {car['car_number']}", 'failure')
         flash('Bu avtomobil silinə bilməz! Avtomobilə aid aktiv xərc məlumatı mövcuddur.', 'danger')
-    else:
-        car_number = car['car_number']
-        CARS_DATA.remove(car)
-        log_action('DELETE_CAR_SUCCESS', f"Avtomobil silindi: {car_number} (ID: {id})", 'success')
-        flash(f"Avtomobil '{car_number}' uğurla silindi.", 'success')
-    return redirect(redirect_url) 
+        return redirect(redirect_url)
+
+    car_number = car['car_number']
+
+    conn = get_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("DELETE FROM cars WHERE id = %s", (id,))
+        conn.commit()
+    finally:
+        conn.close()
+
+    log_action('DELETE_CAR_SUCCESS', f"Avtomobil silindi: {car_number} (ID: {id})", 'success')
+    flash(f"Avtomobil '{car_number}' uğurla silindi.", 'success')
+    return redirect(redirect_url)
+
 
 @app.route('/admin/driver/edit/<int:id>', methods=['GET', 'POST'])
 @operator_required
@@ -851,26 +1116,59 @@ def edit_driver(id):
 @operator_required
 def edit_car(id):
     car = get_car_by_id(id)
-    if not car: return redirect(url_for('admin_cars')) 
-    if request.method == 'POST': 
-        old_number = car['car_number']
-        car['car_number'] = request.form['car_number']
-        car['model'] = request.form['model']
-        car['driver_id'] = int(request.form['driver_id']) if request.form['driver_id'] else None 
-        
-        log_action('EDIT_CAR', f"Avtomobil məlumatları yeniləndi: '{old_number}' -> '{car['car_number']}' (ID: {id})", 'success')
-        flash(f"Avtomobil '{car['car_number']}' məlumatları yeniləndi.", 'success')
-        return redirect(url_for('admin_cars')) 
-    return render_template('edit_car.html', car=car, drivers=DRIVERS_DATA)
+    if not car:
+        return redirect(url_for('admin_cars'))
+
+    if request.method == 'POST':
+        car_number = request.form['car_number'].strip()
+        model = request.form['model'].strip()
+        driver_id = int(request.form['driver_id']) if request.form.get('driver_id') else None
+
+        if not car_number or not model:
+            flash("Avtomobil nömrəsi və model boş ola bilməz.", "danger")
+            drivers = get_all_drivers()
+            return render_template('edit_car.html', car=car, drivers=drivers)
+
+        conn = get_connection()
+        try:
+            with conn.cursor() as cursor:
+                # eyni nömrə başqa maşında var?
+                cursor.execute("""
+                    SELECT id FROM cars
+                    WHERE car_number = %s AND id <> %s
+                """, (car_number, id))
+                if cursor.fetchone():
+                    flash(f"'{car_number}' nömrəli avtomobil artıq başqa qeydiyyatda var.", "danger")
+                    drivers = get_all_drivers()
+                    return render_template('edit_car.html', car=car, drivers=drivers)
+
+                cursor.execute("""
+                    UPDATE cars
+                    SET car_number = %s,
+                        model = %s,
+                        driver_id = %s
+                    WHERE id = %s
+                """, (car_number, model, driver_id, id))
+            conn.commit()
+        finally:
+            conn.close()
+
+        log_action('EDIT_CAR', f"Avtomobil məlumatları yeniləndi: '{car['car_number']}' -> '{car_number}' (ID: {id})", 'success')
+        flash(f"Avtomobil '{car_number}' məlumatları yeniləndi.", 'success')
+        return redirect(url_for('admin_cars'))
+
+    drivers = get_all_drivers()
+    return render_template('edit_car.html', car=car, drivers=drivers)
+
 
 
 # ----------------------------------------------------
 # 7. TOPLU ƏLAVƏ ETMƏ FUNKSİYALARI (LOGGING ƏLAVƏ EDİLDİ)
 # ----------------------------------------------------
 
-@app.route('/admin/drivers/bulk_add', methods=['POST'])
+@app.route('/admin/cars/bulk_add', methods=['POST'])
 @operator_required
-def bulk_add_driver():
+def bulk_add_car():
     bulk_data = request.form.get('bulk_data', '')
     added_count = 0
     skipped_count = 0
@@ -878,55 +1176,46 @@ def bulk_add_driver():
     conn = get_connection()
     try:
         with conn.cursor() as cursor:
-            # mövcud license-lər
-            cursor.execute("SELECT license_no FROM drivers WHERE license_no IS NOT NULL AND license_no <> ''")
-            existing_licenses = {row["license_no"] for row in cursor.fetchall()}
+            cursor.execute("SELECT car_number FROM cars")
+            existing_car_numbers = {row["car_number"] for row in cursor.fetchall()}
 
             for line in bulk_data.splitlines():
                 if not line.strip():
                     continue
                 parts = line.split(';')
-                if not parts:
-                    continue
-
-                name = parts[0].strip()
-                if not name:
+                if len(parts) < 2:
                     skipped_count += 1
                     continue
 
-                license_no = parts[1].strip() if len(parts) > 1 else ""
-                phone = parts[2].strip() if len(parts) > 2 else ""
-                start_date = parts[3].strip() if len(parts) > 3 else None
+                car_number = parts[0].strip()
+                model = parts[1].strip()
 
-                if start_date:
-                    try:
-                        datetime.strptime(start_date, '%Y-%m-%d')
-                    except ValueError:
-                        start_date_db = None
-                    else:
-                        start_date_db = start_date
-                else:
-                    start_date_db = None
+                if not car_number or not model:
+                    skipped_count += 1
+                    continue
 
-                if license_no and license_no in existing_licenses:
+                if car_number in existing_car_numbers:
                     skipped_count += 1
                     continue
 
                 cursor.execute("""
-                    INSERT INTO drivers (name, license_no, phone, start_date)
-                    VALUES (%s, %s, %s, %s)
-                """, (name, license_no, phone, start_date_db))
-                if license_no:
-                    existing_licenses.add(license_no)
+                    INSERT INTO cars (
+                        car_number, model, brand, model_name, category,
+                        driver_id, assistant_id, planner_id, notes
+                    )
+                    VALUES (%s, %s, %s, %s, %s, NULL, NULL, NULL, %s)
+                """, (car_number, model, "", "", "", ""))
+                existing_car_numbers.add(car_number)
                 added_count += 1
 
         conn.commit()
     finally:
         conn.close()
 
-    log_action('BULK_ADD_DRIVER', f"{added_count} sürücü toplu əlavə edildi, {skipped_count} sətir ötürüldü.", 'success')
-    flash(f"{added_count} sürücü uğurla əlavə edildi. {skipped_count} sətir (təkrarlanan vəsiqə və ya səhv format) ötürüldü.", 'success')
-    return redirect(url_for('admin_drivers'))
+    log_action('BULK_ADD_CAR', f"{added_count} avtomobil toplu əlavə edildi, {skipped_count} sətir ötürüldü.", 'success')
+    flash(f"{added_count} avtomobil uğurla əlavə edildi. {skipped_count} sətir (təkrarlanan nömrə və ya səhv format) ötürüldü.", 'success')
+    return redirect(url_for('admin_cars'))
+
 
 
 @app.route('/admin/cars/bulk_add', methods=['POST'])
@@ -1173,7 +1462,8 @@ def admin_reports():
         except ValueError: 
             flash("Bitmə tarix formatı yanlışdır (YYYY-MM-DD olmalıdır).", "warning")
 
-        total_amount = sum(e['expense']['amount'] for e in filtered_expenses)
+    total_amount = sum(e['expense']['amount'] for e in filtered_expenses)
+
 
     # BUNLAR ARTIQ DB-DƏN GƏLİR
     operators = get_operators()
