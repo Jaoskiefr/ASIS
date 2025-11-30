@@ -658,38 +658,63 @@ def add_expense():
     flash(f'{expense_type} xərci uğurla əlavə edildi.', 'success')
     return redirect(url_for('index'))
 
-@app.route('/assign_car', methods=['POST'])
-@operator_required
-def assign_car(): 
-    # BU FUNKSİYA ARTIQ update_car_meta İLƏ ƏVƏZ OLUNUB, amma hələ də qala bilər
-    car_id = request.form.get('car_id'); driver_id = request.form.get('driver_id'); car_to_assign = get_car_by_id(car_id)
-    if car_to_assign: 
-        car_to_assign['driver_id'] = int(driver_id) if driver_id else None
-        log_action('ASSIGN_DRIVER', f"{car_to_assign['car_number']} avtomobilinə sürücü təyin edildi (ID: {driver_id}).", 'success')
-    return redirect(url_for('index'))
-
 @app.route('/update_car_meta', methods=['POST'])
 @operator_required
 def update_car_meta():
-    car_id = request.form.get('car_id'); car = get_car_by_id(car_id)
-    if car:
-        car['brand'] = request.form.get('brand', '').strip()
-        car['model_name'] = request.form.get('model_name', '').strip()
-        car['category'] = request.form.get('category', '').strip()
-        d_id = request.form.get('driver_id'); a_id = request.form.get('assistant_id'); p_id = request.form.get('planner_id')
-        
-        car['driver_id'] = int(d_id) if d_id else None
-        car['assistant_id'] = int(a_id) if a_id else None
-        car['planner_id'] = int(p_id) if p_id else None
-        car['notes'] = request.form.get('notes', '').strip()
-        
-        log_action('UPDATE_CAR_META', f"{car['car_number']} avtomobilinin meta-məlumatları yeniləndi.", 'success')
-        flash('Avtomobil məlumatları yeniləndi.', 'success')
-    else:
-        log_action('UPDATE_CAR_META_FAILURE', f"Avtomobil tapılmadı (ID: {car_id})", 'failure')
-        flash('Avtomobil tapılmadı və məlumatlar yenilənmədi.', 'danger')
-        
+    car_id = request.form.get('car_id')
+    if not car_id:
+        flash('Avtomobil ID tapılmadı.', 'danger')
+        return redirect(url_for('index'))
+
+    brand = request.form.get('brand', '').strip()
+    model_name = request.form.get('model_name', '').strip()
+    category = request.form.get('category', '').strip()
+    notes = request.form.get('notes', '').strip()
+
+    d_id = request.form.get('driver_id')
+    a_id = request.form.get('assistant_id')
+    p_id = request.form.get('planner_id')
+
+    driver_id = int(d_id) if d_id else None
+    assistant_id = int(a_id) if a_id else None
+    planner_id = int(p_id) if p_id else None
+
+    conn = get_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                UPDATE cars
+                SET brand = %s,
+                    model_name = %s,
+                    category = %s,
+                    driver_id = %s,
+                    assistant_id = %s,
+                    planner_id = %s,
+                    notes = %s
+                WHERE id = %s
+            """, (
+                brand,
+                model_name,
+                category,
+                driver_id,
+                assistant_id,
+                planner_id,
+                notes,
+                car_id
+            ))
+        conn.commit()
+    finally:
+        conn.close()
+
+    car = get_car_by_id(car_id)
+    car_number = car['car_number'] if car else car_id
+
+    log_action('UPDATE_CAR_META',
+               f"{car_number} avtomobilinin meta-məlumatları yeniləndi.",
+               'success')
+    flash('Avtomobil məlumatları yeniləndi.', 'success')
     return redirect(url_for('index'))
+
 
 # --- Operatorun İdarəetmə Səhifələri ---
 
@@ -848,51 +873,138 @@ def delete_assistant(aid):
 @operator_required
 def admin_planners():
     log_action('VIEW_PAGE', 'Planlamaçı idarəetmə səhifəsinə baxış', 'success')
+
+    planners = get_all_planners()  # DB-dən gəlir
     planners_with_expense_info = []
-    for p in PLANNERS_DATA:
-        p_copy = p.copy()
-        p_copy['has_expenses'] = any(e.get('planner_id_at_expense') == p_copy['id'] for e in EXPENSES)
+    for p in planners:
+        p_copy = dict(p)
+        p_copy['has_expenses'] = any(
+            e.get('planner_id_at_expense') == p_copy['id'] for e in EXPENSES
+        )
         planners_with_expense_info.append(p_copy)
+
     return render_template('admin_planners.html', planners=planners_with_expense_info)
 
 @app.route('/admin/planners/add', methods=['POST'])
 @operator_required
 def add_planner():
     name = request.form['name'].strip()
-    if name: 
-        PLANNERS_DATA.append({"id": _next_id(PLANNERS_DATA, 301), "name": name})
-        log_action('ADD_PLANNER', f"Yeni planlamaçı əlavə edildi: {name}", 'success')
-        flash(f"Planlamaçı '{name}' əlavə edildi.", 'success')
+    if not name:
+        flash("Planlamaçı adı boş ola bilməz.", "danger")
+        return redirect(url_for('admin_planners'))
+
+    conn = get_connection()
+    try:
+        with conn.cursor() as cursor:
+            # eyni ad varmı? (case-insensitive)
+            cursor.execute("""
+                SELECT id FROM planners
+                WHERE LOWER(name) = LOWER(%s)
+            """, (name,))
+            if cursor.fetchone():
+                flash("Bu adda planlamaçı artıq mövcuddur.", "danger")
+                return redirect(url_for('admin_planners'))
+
+            cursor.execute("INSERT INTO planners (name) VALUES (%s)", (name,))
+        conn.commit()
+    finally:
+        conn.close()
+
+    log_action('ADD_PLANNER', f"Yeni planlamaçı əlavə edildi: {name}", 'success')
+    flash(f"Planlamaçı '{name}' əlavə edildi.", 'success')
     return redirect(url_for('admin_planners'))
+
 
 @app.route('/admin/planner/edit/<int:pid>', methods=['GET', 'POST'])
 @operator_required
 def edit_planner(pid):
     planner = get_planner_by_id(pid)
-    if not planner: return redirect(url_for('admin_planners'))
-    if request.method == 'POST': 
-        old_name = planner['name']
-        planner['name'] = request.form['name'].strip()
-        log_action('EDIT_PLANNER', f"Planlamaçı adı dəyişdirildi: '{old_name}' -> '{planner['name']}' (ID: {pid})", 'success')
-        flash(f"Planlamaçı '{old_name}' adı '{planner['name']}' olaraq dəyişdirildi.", 'success')
+    if not planner:
         return redirect(url_for('admin_planners'))
+
+    if request.method == 'POST':
+        new_name = request.form['name'].strip()
+        if not new_name:
+            flash("Planlamaçı adı boş ola bilməz.", "danger")
+            return render_template('edit_planner.html', planner=planner)
+
+        conn = get_connection()
+        try:
+            with conn.cursor() as cursor:
+                # başqa planlamaçıda eyni ad varmı?
+                cursor.execute("""
+                    SELECT id FROM planners
+                    WHERE LOWER(name) = LOWER(%s) AND id <> %s
+                """, (new_name, pid))
+                if cursor.fetchone():
+                    flash("Bu adda planlamaçı artıq mövcuddur.", "danger")
+                    return render_template('edit_planner.html', planner=planner)
+
+                cursor.execute("""
+                    UPDATE planners
+                    SET name = %s
+                    WHERE id = %s
+                """, (new_name, pid))
+            conn.commit()
+        finally:
+            conn.close()
+
+        log_action(
+            'EDIT_PLANNER',
+            f"Planlamaçı adı dəyişdirildi: '{planner['name']}' -> '{new_name}' (ID: {pid})",
+            'success'
+        )
+        flash(f"Planlamaçı '{planner['name']}' adı '{new_name}' olaraq dəyişdirildi.", 'success')
+        return redirect(url_for('admin_planners'))
+
     return render_template('edit_planner.html', planner=planner)
+
 
 @app.route('/admin/planner/delete/<int:pid>', methods=['POST'])
 @operator_required
 def delete_planner(pid):
+    # Əvvəlcə xərc olub-olmadığını yoxla
     if any(e.get('planner_id_at_expense') == pid for e in EXPENSES):
-        log_action('DELETE_PLANNER_FAILURE', f"Planlamaçı silinə bilmədi (xərc mövcuddur): ID {pid}", 'failure')
-        flash('Bu planlamaçı silinə bilməz! Planlamaçıya aid aktiv xərc məlumatı mövcuddur.', 'danger')
-        return redirect(url_for('admin_planners')) 
+        log_action(
+            'DELETE_PLANNER_FAILURE',
+            f"Planlamaçı silinə bilmədi (xərc mövcuddur): ID {pid}",
+            'failure'
+        )
+        flash(
+            'Bu planlamaçı silinə bilməz! Planlamacıya aid aktiv xərc məlumatı mövcuddur.',
+            'danger'
+        )
+        return redirect(url_for('admin_planners'))
+
     planner = get_planner_by_id(pid)
-    if planner: 
+    if planner:
         name = planner['name']
-        PLANNERS_DATA.remove(planner)
-        [car.update({'planner_id': None}) for car in CARS_DATA if car.get('planner_id') == pid]
-        log_action('DELETE_PLANNER_SUCCESS', f"Planlamaçı silindi: {name} (ID: {pid})", 'success')
+
+        conn = get_connection()
+        try:
+            with conn.cursor() as cursor:
+                # maşınlarda bu planlamaçı varsa, null et
+                cursor.execute("""
+                    UPDATE cars
+                    SET planner_id = NULL
+                    WHERE planner_id = %s
+                """, (pid,))
+
+                # planlamaçını sil
+                cursor.execute("DELETE FROM planners WHERE id = %s", (pid,))
+            conn.commit()
+        finally:
+            conn.close()
+
+        log_action(
+            'DELETE_PLANNER_SUCCESS',
+            f"Planlamaçı silindi: {name} (ID: {pid})",
+            'success'
+        )
         flash(f"Planlamaçı '{name}' silindi.", 'success')
+
     return redirect(url_for('admin_planners'))
+
 
 @app.route('/admin/drivers/add', methods=['POST'])
 @operator_required
@@ -1216,62 +1328,92 @@ def bulk_add_car():
     flash(f"{added_count} avtomobil uğurla əlavə edildi. {skipped_count} sətir (təkrarlanan nömrə və ya səhv format) ötürüldü.", 'success')
     return redirect(url_for('admin_cars'))
 
-
-
-@app.route('/admin/cars/bulk_add', methods=['POST'])
-@operator_required
-def bulk_add_car():
-    bulk_data = request.form.get('bulk_data', '')
-    added_count = 0; skipped_count = 0
-    next_car_id = _next_id(CARS_DATA, 1)
-    existing_car_numbers = {c['car_number'] for c in CARS_DATA}
-    for line in bulk_data.splitlines():
-        if not line.strip(): continue
-        parts = line.split(';')
-        if len(parts) < 2: skipped_count += 1; continue 
-        car_number = parts[0].strip(); model = parts[1].strip()
-        if not car_number or not model: skipped_count += 1; continue
-        if car_number not in existing_car_numbers:
-            CARS_DATA.append({"id": next_car_id, "car_number": car_number, "model": model, "driver_id": None, "assistant_id": None, "planner_id": None, "brand": "", "model_name": "", "category": "", "notes": ""})
-            existing_car_numbers.add(car_number); next_car_id += 1; added_count += 1
-        else: skipped_count += 1
-    log_action('BULK_ADD_CAR', f"{added_count} avtomobil toplu əlavə edildi, {skipped_count} sətir ötürüldü.", 'success')
-    flash(f"{added_count} avtomobil uğurla əlavə edildi. {skipped_count} sətir (təkrarlanan nömrə və ya səhv format) ötürüldü.", 'success')
-    return redirect(url_for('admin_cars'))
-
 @app.route('/admin/assistants/bulk_add', methods=['POST'])
 @operator_required
 def bulk_add_assistant():
-    bulk_data = request.form.get('bulk_data', ''); added_count = 0; skipped_count = 0
-    next_assistant_id = _next_id(ASSISTANTS_DATA, 201)
-    existing_assistants = {a['name'].lower() for a in ASSISTANTS_DATA}
-    for line in bulk_data.splitlines():
-        name = line.strip(); 
-        if not name: continue
-        if name.lower() not in existing_assistants:
-            ASSISTANTS_DATA.append({"id": next_assistant_id, "name": name})
-            existing_assistants.add(name.lower()); next_assistant_id += 1; added_count += 1
-        else: skipped_count += 1
-    log_action('BULK_ADD_ASSISTANT', f"{added_count} köməkçi toplu əlavə edildi, {skipped_count} sətir ötürüldü.", 'success')
-    flash(f"{added_count} köməkçi uğurla əlavə edildi. {skipped_count} sətir (təkrarlanan ad) ötürüldü.", 'success')
+    bulk_data = request.form.get('bulk_data', '')
+    added_count = 0
+    skipped_count = 0
+
+    conn = get_connection()
+    try:
+        with conn.cursor() as cursor:
+            # mövcud köməkçi adları (lowercase)
+            cursor.execute("SELECT name FROM assistants")
+            existing_assistants = {row['name'].lower() for row in cursor.fetchall()}
+
+            for line in bulk_data.splitlines():
+                name = line.strip()
+                if not name:
+                    continue
+
+                lower_name = name.lower()
+                if lower_name in existing_assistants:
+                    skipped_count += 1
+                    continue
+
+                cursor.execute("INSERT INTO assistants (name) VALUES (%s)", (name,))
+                existing_assistants.add(lower_name)
+                added_count += 1
+
+        conn.commit()
+    finally:
+        conn.close()
+
+    log_action(
+        'BULK_ADD_ASSISTANT',
+        f"{added_count} köməkçi toplu əlavə edildi, {skipped_count} sətir ötürüldü.",
+        'success'
+    )
+    flash(
+        f"{added_count} köməkçi uğurla əlavə edildi. {skipped_count} sətir (təkrarlanan ad və ya boş sətir) ötürüldü.",
+        'success'
+    )
     return redirect(url_for('admin_assistants'))
+
 
 @app.route('/admin/planners/bulk_add', methods=['POST'])
 @operator_required
 def bulk_add_planner():
-    bulk_data = request.form.get('bulk_data', ''); added_count = 0; skipped_count = 0
-    next_planner_id = _next_id(PLANNERS_DATA, 301)
-    existing_planners = {p['name'].lower() for p in PLANNERS_DATA}
-    for line in bulk_data.splitlines():
-        name = line.strip(); 
-        if not name: continue
-        if name.lower() not in existing_planners:
-            PLANNERS_DATA.append({"id": next_planner_id, "name": name})
-            existing_planners.add(name.lower()); next_planner_id += 1; added_count += 1
-        else: skipped_count += 1
-    log_action('BULK_ADD_PLANNER', f"{added_count} planlamaçı toplu əlavə edildi, {skipped_count} sətir ötürüldü.", 'success')
-    flash(f"{added_count} planlamaçı uğurla əlavə edildi. {skipped_count} sətir (təkrarlanan ad) ötürüldü.", 'success')
+    bulk_data = request.form.get('bulk_data', '')
+    added_count = 0
+    skipped_count = 0
+
+    conn = get_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT name FROM planners")
+            existing_planners = {row['name'].lower() for row in cursor.fetchall()}
+
+            for line in bulk_data.splitlines():
+                name = line.strip()
+                if not name:
+                    continue
+
+                lower_name = name.lower()
+                if lower_name in existing_planners:
+                    skipped_count += 1
+                    continue
+
+                cursor.execute("INSERT INTO planners (name) VALUES (%s)", (name,))
+                existing_planners.add(lower_name)
+                added_count += 1
+
+        conn.commit()
+    finally:
+        conn.close()
+
+    log_action(
+        'BULK_ADD_PLANNER',
+        f"{added_count} planlamaçı toplu əlavə edildi, {skipped_count} sətir ötürüldü.",
+        'success'
+    )
+    flash(
+        f"{added_count} planlamaçı uğurla əlavə edildi. {skipped_count} sətir (təkrarlanan ad və ya boş sətir) ötürüldü.",
+        'success'
+    )
     return redirect(url_for('admin_planners'))
+
 
 # ----------------------------------------------------
 # 8. YALNIZ ADMİN FUNKSİYALARI (İstifadəçi İdarəetməsi)
