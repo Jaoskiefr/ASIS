@@ -18,14 +18,6 @@ app.secret_key = 'ASIS_Sizin_Real_Gizli_Acariniz_Burada_Olsun'
 # YENİ: Audit loqları üçün
 AUDIT_LOGS = []
 
-# İstifadəçi bazası - YENİLƏNİB: 'is_active' əlavə edildi və 'supervisor' yaradıldı
-USERS = [
-    {"id": 1, "fullname": "Administrator", "username": "admin", "password": "adminpass", "role": "admin", "is_active": True},
-    {"id": 2, "fullname": "Asif Atababayev", "username": "operator", "password": "operpass", "role": "user", "is_active": True},
-    {"id": 3, "fullname": "Super Vizor", "username": "supervisor", "password": "superpass", "role": "supervisor", "is_active": True}
-]
-next_user_id = 4 # Növbəti ID 3-dən başlamalıdır
-
 # Sürücü Məlumatları
 DRIVERS_DATA = [
     {"id": 101, "name": "Cavid Məmmədov Əli oğlu", "license_no": "AZE12345", "phone": "050-111-22-33", "start_date": "2023-10-28"},
@@ -361,7 +353,14 @@ def index():
     # === ADMİN DASHBOARD MƏLUMATLARI ===
     if session['role'] == 'admin':
         log_action('VIEW_PAGE', 'Admin Dashboarduna baxış', 'success')
-        total_operator_count = len([u for u in USERS if u['role'] == 'user'])
+                conn = get_connection()
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute("SELECT COUNT(*) AS cnt FROM users WHERE role = 'user'")
+                total_operator_count = cursor.fetchone()["cnt"]
+        finally:
+            conn.close()
+
         total_car_count = len(CARS_DATA)
         total_driver_count = len(DRIVERS_DATA)
         total_assistant_count = len(ASSISTANTS_DATA)
@@ -843,39 +842,51 @@ def bulk_add_planner():
 @admin_required
 def admin_users():
     log_action('VIEW_PAGE', 'Admin -> Operator İdarəetmə səhifəsinə baxış', 'success')
-    users_list = [user for user in USERS if user['role'] == 'user'] 
+    users_list = get_operators()  # yalnız operatorlar (role='user')
     return render_template('admin_users.html', users=users_list)
+
 
 @app.route('/admin/users/add', methods=['POST'])
 @admin_required
 def add_user():
-    global next_user_id 
-    fullname = request.form['fullname']; username = request.form['username']
-    password = request.form['password']; role = request.form['role']
-    
-    # Admin yalnız operator (user) və ya başqa admin yarada bilər
+    fullname = request.form['fullname'].strip()
+    username = request.form['username'].strip()
+    password = request.form['password']
+    role = request.form['role']
+
+    # Admin yalnız operator və ya admin yarada bilər
     if role not in ['user', 'admin']:
         flash('Admin yalnız "Operator" və ya "Admin" rolu təyin edə bilər.', 'danger')
         return redirect(url_for('admin_users'))
-        
+
     if get_user_by_username(username):
         log_action('ADD_USER_FAILURE', f"Təkrarlanan istifadəçi adı: {username}", 'failure')
         flash('Bu istifadəçi adı artıq mövcuddur!', 'danger')
         return redirect(url_for('admin_users'))
-        
-    USERS.append({"id": next_user_id, "fullname": fullname, "username": username, "password": password, "role": role, "is_active": True })
-    next_user_id += 1 
-    
+
+    conn = get_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                INSERT INTO users (fullname, username, password, role, is_active)
+                VALUES (%s, %s, %s, %s, %s)
+            """, (fullname, username, password, role, 1))
+        conn.commit()
+    finally:
+        conn.close()
+
     log_action('ADD_USER_SUCCESS', f"Admin yeni istifadəçi əlavə etdi: {username} (Rol: {role})", 'success')
     flash(f"İstifadəçi '{fullname}' ({role}) əlavə edildi.", 'success')
     return redirect(url_for('admin_users'))
+
 
 @app.route('/admin/user/edit/<int:id>', methods=['GET', 'POST'])
 @admin_required
 def edit_user(id):
     user = get_user_by_id(id)
-    if not user: return redirect(url_for('admin_users')) 
-    
+    if not user:
+        return redirect(url_for('admin_users'))
+
     # Admin supervisor-u redaktə edə bilməz
     if user['role'] == 'supervisor':
         log_action('EDIT_USER_FAILURE', f"Admin supervisor-u redaktə etməyə cəhd etdi (ID: {id})", 'failure')
@@ -883,43 +894,73 @@ def edit_user(id):
         return redirect(url_for('admin_users'))
 
     if request.method == 'POST':
-        new_username = request.form['username']
+        new_fullname = request.form['fullname'].strip()
+        new_username = request.form['username'].strip()
+        new_role = request.form['role']
+
         existing_user = get_user_by_username(new_username)
         if existing_user and existing_user['id'] != id:
             flash('Bu istifadəçi adı artıq başqası tərəfindən istifadə olunur!', 'danger')
-            return render_template('edit_user.html', user=user) 
-        
-        user['fullname'] = request.form['fullname']
-        user['username'] = new_username
-        new_role = request.form['role']
-        
-        # Rol dəyişikliyini yoxla
+            return render_template('edit_user.html', user=user)
+
         if new_role not in ['user', 'admin']:
             flash('Admin yalnız "Operator" və ya "Admin" rolu təyin edə bilər.', 'danger')
             return render_template('edit_user.html', user=user)
-        user['role'] = new_role
-        
+
         new_password = request.form.get('password')
-        if new_password: user['password'] = new_password 
-        
-        log_action('EDIT_USER_SUCCESS', f"Admin istifadəçi məlumatlarını yenilədi: {user['username']} (ID: {id})", 'success')
-        flash(f"İstifadəçi '{user['fullname']}' məlumatları yeniləndi.", 'success')
+        conn = get_connection()
+        try:
+            with conn.cursor() as cursor:
+                if new_password:
+                    cursor.execute("""
+                        UPDATE users
+                        SET fullname = %s,
+                            username = %s,
+                            role = %s,
+                            password = %s
+                        WHERE id = %s
+                    """, (new_fullname, new_username, new_role, new_password, id))
+                else:
+                    cursor.execute("""
+                        UPDATE users
+                        SET fullname = %s,
+                            username = %s,
+                            role = %s
+                        WHERE id = %s
+                    """, (new_fullname, new_username, new_role, id))
+            conn.commit()
+        finally:
+            conn.close()
+
+        log_action('EDIT_USER_SUCCESS', f"Admin istifadəçi məlumatlarını yenilədi: {new_username} (ID: {id})", 'success')
+        flash(f"İstifadəçi '{new_fullname}' məlumatları yeniləndi.", 'success')
         return redirect(url_for('admin_users'))
+
     return render_template('edit_user.html', user=user)
+
 
 @app.route('/admin/user/delete/<int:id>', methods=['POST'])
 @admin_required
 def delete_user(id):
     user = get_user_by_id(id)
-    if user and user['role'] not in ['admin', 'supervisor']: 
+    if user and user['role'] not in ['admin', 'supervisor']:
         name = user['fullname']
-        USERS.remove(user)
+
+        conn = get_connection()
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute("DELETE FROM users WHERE id = %s", (id,))
+            conn.commit()
+        finally:
+            conn.close()
+
         log_action('DELETE_USER_SUCCESS', f"Admin istifadəçini sildi: {name} (ID: {id})", 'success')
         flash(f"İstifadəçi '{name}' silindi.", 'success')
     elif user and user['role'] in ['admin', 'supervisor']:
         log_action('DELETE_USER_FAILURE', f"Admin başqa admini/supervisoru silməyə cəhd etdi (ID: {id})", 'failure')
         flash('Admin başqa Admini və ya Supervisoru silə bilməz.', 'danger')
     return redirect(url_for('admin_users'))
+
 
 # ----------------------------------------------------
 # 9. HESABATLAR (Yalnız Admin üçün) - YENİLƏNDİ
@@ -984,7 +1025,7 @@ def admin_reports():
             flash("Bitmə tarix formatı yanlışdır (YYYY-MM-DD olmalıdır).", "warning")
 
     total_amount = sum(e['expense']['amount'] for e in filtered_expenses)
-    operators = [user for user in USERS if user['role'] == 'user']
+    operators = get_operators()
 
     return render_template(
         'admin_reports.html', 
@@ -1078,36 +1119,51 @@ def admin_deleted_reports():
 def supervisor_dashboard():
     """Supervisor üçün əsas panel (YENİLƏNİB - STATİSTİKALARLA)."""
     log_action('VIEW_PAGE', 'Supervisor Dashboarduna baxış', 'success')
-    
-    # Statistikaları hesabla
-    total_users = len(USERS)
-    active_users = len([u for u in USERS if u.get('is_active', True)])
+
+    conn = get_connection()
+    try:
+        with conn.cursor() as cursor:
+            # ümumi user sayı
+            cursor.execute("SELECT COUNT(*) AS cnt FROM users")
+            total_users = cursor.fetchone()["cnt"]
+
+            # aktiv user sayı
+            cursor.execute("SELECT COUNT(*) AS cnt FROM users WHERE is_active = 1")
+            active_users = cursor.fetchone()["cnt"]
+
+            # rol bölgüsü
+            cursor.execute("SELECT role, COUNT(*) AS cnt FROM users GROUP BY role")
+            role_rows = cursor.fetchall()
+    finally:
+        conn.close()
+
     passive_users = total_users - active_users
-    total_logs = len(AUDIT_LOGS)
-    
-    # Rol bölgüsü üçün chart data
+
     roles_count = {'admin': 0, 'supervisor': 0, 'user': 0}
-    for user in USERS:
-        if user['role'] in roles_count:
-            roles_count[user['role']] += 1
-        
-    chart_labels = list(roles_count.keys())
-    chart_data_values = list(roles_count.values())
-    
+    for r in role_rows:
+        if r["role"] in roles_count:
+            roles_count[r["role"]] = r["cnt"]
+
+    total_logs = len(AUDIT_LOGS)  # hələlik RAM-də qalır
+
     stats = {
         'total_users': total_users,
         'active_users': active_users,
         'passive_users': passive_users,
         'total_logs': total_logs
     }
-    
-    chart_data = {'labels': chart_labels, 'data': chart_data_values}
-    
+
+    chart_data = {
+        'labels': list(roles_count.keys()),
+        'data': list(roles_count.values())
+    }
+
     return render_template(
-        'supervisor_dashboard.html', 
-        stats=stats, 
+        'supervisor_dashboard.html',
+        stats=stats,
         chart_data=chart_data
     )
+
 
 @app.route('/supervisor/reports')
 @supervisor_required
@@ -1185,32 +1241,39 @@ def supervisor_reports():
 def supervisor_operations():
     """Bütün istifadəçiləri idarə etmə səhifəsi."""
     log_action('VIEW_PAGE', 'Supervisor -> Əməliyyatlar (İstifadəçi İdarəetmə) səhifəsinə baxış', 'success')
-    # Supervisor bütün istifadəçiləri görür
-    return render_template('supervisor_operations.html', users=USERS)
+    users = get_all_users()
+    return render_template('supervisor_operations.html', users=users)
+
 
 @app.route('/supervisor/operations/add_user', methods=['POST'])
 @supervisor_required
 def supervisor_add_user():
     """Supervisor yeni istifadəçi əlavə edir."""
-    global next_user_id 
-    fullname = request.form['fullname']; username = request.form['username']
-    password = request.form['password']; role = request.form['role']
-    
+    fullname = request.form['fullname'].strip()
+    username = request.form['username'].strip()
+    password = request.form['password']
+    role = request.form['role']
+
     if get_user_by_username(username):
         log_action('SUPERVISOR_ADD_USER_FAILURE', f"Təkrarlanan istifadəçi adı: {username}", 'failure')
         flash('Bu istifadəçi adı artıq mövcuddur!', 'danger')
         return redirect(url_for('supervisor_operations'))
-        
-    new_user = {
-        "id": next_user_id, "fullname": fullname, "username": username, 
-        "password": password, "role": role, "is_active": True 
-    }
-    USERS.append(new_user)
-    next_user_id += 1 
-    
+
+    conn = get_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                INSERT INTO users (fullname, username, password, role, is_active)
+                VALUES (%s, %s, %s, %s, %s)
+            """, (fullname, username, password, role, 1))
+        conn.commit()
+    finally:
+        conn.close()
+
     log_action('SUPERVISOR_ADD_USER_SUCCESS', f"Supervisor yeni istifadəçi əlavə etdi: {username} (Rol: {role})", 'success')
     flash(f"İstifadəçi '{fullname}' ({role}) əlavə edildi.", 'success')
     return redirect(url_for('supervisor_operations'))
+
 
 
 @app.route('/supervisor/user/edit/<int:id>', methods=['GET', 'POST'])
@@ -1218,50 +1281,73 @@ def supervisor_add_user():
 def supervisor_edit_user(id):
     """Supervisor istifadəçiləri (adminlər daxil) redaktə edir."""
     user = get_user_by_id(id)
-    if not user: 
+    if not user:
         return redirect(url_for('supervisor_operations'))
-        
+
     # Supervisor özünü redaktə edə bilməz (təhlükəsizlik üçün)
     if user['username'] == session.get('user'):
-         flash('Öz hesabınızı buradan redaktə edə bilməzsiniz.', 'danger')
-         return redirect(url_for('supervisor_operations'))
+        flash('Öz hesabınızı buradan redaktə edə bilməzsiniz.', 'danger')
+        return redirect(url_for('supervisor_operations'))
 
     if request.method == 'POST':
-        new_username = request.form['username']
+        new_fullname = request.form['fullname'].strip()
+        new_username = request.form['username'].strip()
+        new_role = request.form['role']
+        new_active_status = (request.form.get('is_active') == 'on')
+        new_password = request.form.get('password')
+
         existing_user = get_user_by_username(new_username)
         if existing_user and existing_user['id'] != id:
             flash('Bu istifadəçi adı artıq başqası tərəfindən istifadə olunur!', 'danger')
-            return render_template('supervisor_edit_user.html', user=user) 
-            
+            return render_template('supervisor_edit_user.html', user=user)
+
         log_details = [f"İstifadəçi '{user['username']}' (ID: {id}) üçün dəyişikliklər:"]
-        
-        if user['fullname'] != request.form['fullname']:
-            log_details.append(f"Ad: '{user['fullname']}' -> '{request.form['fullname']}'")
-            user['fullname'] = request.form['fullname']
-            
+
+        if user['fullname'] != new_fullname:
+            log_details.append(f"Ad: '{user['fullname']}' -> '{new_fullname}'")
+
         if user['username'] != new_username:
             log_details.append(f"Login: '{user['username']}' -> '{new_username}'")
-            user['username'] = new_username
-            
-        if user['role'] != request.form['role']:
-            log_details.append(f"Rol: '{user['role']}' -> '{request.form['role']}'")
-            user['role'] = request.form['role']
-            
-        # 'is_active' checkbox kimi gəlir. Əgər 'on' deyilsə, deməli False göndərilib.
-        new_active_status = request.form.get('is_active') == 'on'
-        if user.get('is_active', True) != new_active_status: # .get() ilə təhlükəsiz yoxlama
+
+        if user['role'] != new_role:
+            log_details.append(f"Rol: '{user['role']}' -> '{new_role}'")
+
+        if user.get('is_active', True) != new_active_status:
             log_details.append(f"Status: '{user.get('is_active', True)}' -> '{new_active_status}'")
-            user['is_active'] = new_active_status
-            
-        new_password = request.form.get('password')
-        if new_password: 
-            user['password'] = new_password 
+
+        if new_password:
             log_details.append("Parol yeniləndi.")
-            
+
+        conn = get_connection()
+        try:
+            with conn.cursor() as cursor:
+                if new_password:
+                    cursor.execute("""
+                        UPDATE users
+                        SET fullname = %s,
+                            username = %s,
+                            role = %s,
+                            is_active = %s,
+                            password = %s
+                        WHERE id = %s
+                    """, (new_fullname, new_username, new_role, int(new_active_status), new_password, id))
+                else:
+                    cursor.execute("""
+                        UPDATE users
+                        SET fullname = %s,
+                            username = %s,
+                            role = %s,
+                            is_active = %s
+                        WHERE id = %s
+                    """, (new_fullname, new_username, new_role, int(new_active_status), id))
+            conn.commit()
+        finally:
+            conn.close()
+
         log_action('SUPERVISOR_EDIT_USER', " ".join(log_details), 'success')
-        flash(f"İstifadəçi '{user['fullname']}' məlumatları yeniləndi.", 'success')
+        flash(f"İstifadəçi '{new_fullname}' məlumatları yeniləndi.", 'success')
         return redirect(url_for('supervisor_operations'))
-        
+
     return render_template('supervisor_edit_user.html', user=user)
 
 @app.route('/supervisor/user/delete/<int:id>', methods=['POST'])
@@ -1273,13 +1359,22 @@ def supervisor_delete_user(id):
         log_action('SUPERVISOR_DELETE_USER_FAILURE', f"Supervisor özünü silməyə cəhd etdi (ID: {id})", 'failure')
         flash('Supervisor öz hesabını silə bilməz.', 'danger')
         return redirect(url_for('supervisor_operations'))
-        
-    if user: 
+
+    if user:
         name = user['fullname']
-        USERS.remove(user)
+        conn = get_connection()
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute("DELETE FROM users WHERE id = %s", (id,))
+            conn.commit()
+        finally:
+            conn.close()
+
         log_action('SUPERVISOR_DELETE_USER_SUCCESS', f"Supervisor istifadəçini sildi: {name} (ID: {id})", 'success')
         flash(f"İstifadəçi '{name}' silindi.", 'success')
+
     return redirect(url_for('supervisor_operations'))
+
 
 # ----------------------------------------------------
 # 12. TƏTBİQİ BAŞLATMA
