@@ -11,32 +11,46 @@ import socket # <--- KOMPYUTER ADINI ALMAQ ÜÇÜN İMPORT
 app = Flask(__name__)
 app.secret_key = 'ASIS_Sizin_Real_Gizli_Acariniz_Burada_Olsun' 
 
-# ----------------------------------------------------
-# 2. MƏLUMAT BAZASININ TƏQLİDİ (REAL DB ƏVƏZİ)
-# ----------------------------------------------------
 
-# YENİ: Audit loqları üçün
-AUDIT_LOGS = []
+#  DB XƏRC ƏLAVƏ FUNKSIYASI
+# ============================
 
-def _next_id(seq, start):
-    return (max([x["id"] for x in seq]) + 1) if seq else start
-
-# Xərc Məlumatları
-EXPENSES = [
-    {"expense_id": 1, "car_id": 1, "amount": 85.50, "type": "Yanacaq", "litr": 15.0, "description": "AI-92 - Qeyd", "entered_by": "operator", "timestamp": datetime(2025, 10, 20, 9, 30),
-     "driver_id_at_expense": 101, "assistant_id_at_expense": None, "planner_id_at_expense": None},
-    {"expense_id": 2, "car_id": 2, "amount": 40.00, "type": "Avtoyuma", "litr": 0, "description": "Yuma xərci", "entered_by": "admin", "timestamp": datetime(2025, 10, 21, 14, 15),
-     "driver_id_at_expense": 102, "assistant_id_at_expense": None, "planner_id_at_expense": 301}, 
-    {"expense_id": 3, "car_id": 1, "amount": 250.00, "type": "Təmir", "litr": 0, "description": "Yağ dəyişimi", "entered_by": "operator", "timestamp": datetime(2025, 10, 22, 17, 0),
-     "driver_id_at_expense": 101, "assistant_id_at_expense": None, "planner_id_at_expense": None},
-    {"expense_id": 4, "car_id": 3, "amount": 100.00, "type": "Yanacaq", "litr": 20.0, "description": "AI-95 - Qeyd 2", "entered_by": "operator", "timestamp": datetime(2025, 10, 25, 16, 19),
-     "driver_id_at_expense": None, "assistant_id_at_expense": 201, "planner_id_at_expense": 301},
-    {"expense_id": 5, "car_id": 2, "amount": 50.00, "type": "Cərimə", "litr": 0, "description": "Sürət həddi", "entered_by": "admin", "timestamp": datetime(2025, 10, 27, 11, 00),
-     "driver_id_at_expense": 102, "assistant_id_at_expense": None, "planner_id_at_expense": 301}, 
-]
-
-DELETED_EXPENSES = []
-EXPENSE_TYPES = ["Yanacaq", "Təmir", "Cərimə", "Avtoyuma", "Yemək", "Digər"]
+def insert_expense(car_id, expense_type, amount, litr, description,
+                   driver_id_at_expense, assistant_id_at_expense,
+                   planner_id_at_expense, entered_by):
+    """
+    Yeni xərci MySQL-də expenses cədvəlinə yazır.
+    """
+    conn = get_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                INSERT INTO expenses (
+                    car_id,
+                    amount,
+                    type,
+                    litr,
+                    description,
+                    entered_by,
+                    driver_id_at_expense,
+                    assistant_id_at_expense,
+                    planner_id_at_expense
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """, (
+                car_id,
+                amount,
+                expense_type,
+                litr,
+                description,
+                entered_by,
+                driver_id_at_expense,
+                assistant_id_at_expense,
+                planner_id_at_expense
+            ))
+        conn.commit()
+    finally:
+        conn.close()
 
 # ----------------------------------------------------
 # 3. KÖMƏKÇİ FUNKSİYALARI (LOGGING YENİLƏNDİ)
@@ -621,42 +635,63 @@ def index():
 @operator_required
 def add_expense():
     car_id = request.form.get('car_id')
-    expense_type = request.form.get('expense_type') 
+    expense_type = request.form.get('expense_type')
     amount = request.form.get('amount')
     litr = request.form.get('litr', 0)
-    description = request.form.get('description', '') 
-    fuel_subtype = request.form.get('fuel_subtype', '') 
-    
+    description = request.form.get('description', '')
+    fuel_subtype = request.form.get('fuel_subtype', '')
+
+    # Yanacaq üçün subtype ilə birləşdirilmiş təsvir
     final_description = description
     if expense_type == 'Yanacaq' and fuel_subtype:
         final_description = f"{fuel_subtype} - {description}" if description else fuel_subtype
 
+    # Avtomobili DB-dən götür
     car = get_car_by_id(car_id)
-    driver_id_at_expense, assistant_id_at_expense, planner_id_at_expense = None, None, None
-    if car:
-        driver_id_at_expense = car.get('driver_id')
-        assistant_id_at_expense = car.get('assistant_id')
-        planner_id_at_expense = car.get('planner_id')
-    else:
+    if not car:
         log_action('ADD_EXPENSE_FAILURE', f"Avtomobil tapılmadı (ID: {car_id})", 'failure')
         flash('Xərc əlavə edilərkən xəta baş verdi: Avtomobil tapılmadı.', 'danger')
         return redirect(url_for('index'))
 
-    all_expense_ids = [e['expense_id'] for e in EXPENSES] + [e['expense_id'] for e in DELETED_EXPENSES]
-    next_id = (max(all_expense_ids) + 1) if all_expense_ids else 1
+    # Xərc daxil edilən anda kimlər bu maşına bağlı idi
+    driver_id_at_expense = car.get('driver_id')
+    assistant_id_at_expense = car.get('assistant_id')
+    planner_id_at_expense = car.get('planner_id')
 
-    new_expense = {
-        "expense_id": next_id, "car_id": int(car_id), "type": expense_type,  
-        "amount": float(amount), "litr": float(litr) if litr else 0.0,
-        "description": final_description, "entered_by": session['user'], "timestamp": datetime.now(),
-        "driver_id_at_expense": driver_id_at_expense, "assistant_id_at_expense": assistant_id_at_expense,
-        "planner_id_at_expense": planner_id_at_expense
-    }
-    EXPENSES.append(new_expense) 
-    
-    log_action('ADD_EXPENSE_SUCCESS', f"{car['car_number']} üçün {amount} AZN ({expense_type}) xərc əlavə edildi.", 'success')
+    # Məbləğ və litr-i rəqəmə çevir
+    try:
+        amount_val = float(amount)
+    except (TypeError, ValueError):
+        flash("Məbləğ düzgün daxil edilməyib.", "danger")
+        return redirect(url_for('index'))
+
+    try:
+        litr_val = float(litr) if litr else 0.0
+    except (TypeError, ValueError):
+        litr_val = 0.0
+
+    # 🔹 Əsas hissə: artıq RAM-a yox, DB-yə yazırıq
+    insert_expense(
+        car_id=int(car_id),
+        expense_type=expense_type,
+        amount=amount_val,
+        litr=litr_val,
+        description=final_description,
+        driver_id_at_expense=driver_id_at_expense,
+        assistant_id_at_expense=assistant_id_at_expense,
+        planner_id_at_expense=planner_id_at_expense,
+        entered_by=session['user']
+    )
+
+    log_action(
+        'ADD_EXPENSE_SUCCESS',
+        f"{car['car_number']} üçün {amount_val} AZN ({expense_type}) xərc əlavə edildi.",
+        'success'
+    )
     flash(f'{expense_type} xərci uğurla əlavə edildi.', 'success')
     return redirect(url_for('index'))
+
+
 
 @app.route('/update_car_meta', methods=['POST'])
 @operator_required
