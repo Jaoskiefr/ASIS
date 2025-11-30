@@ -18,34 +18,8 @@ app.secret_key = 'ASIS_Sizin_Real_Gizli_Acariniz_Burada_Olsun'
 # YENİ: Audit loqları üçün
 AUDIT_LOGS = []
 
-# Sürücü Məlumatları
-DRIVERS_DATA = [
-    {"id": 101, "name": "Cavid Məmmədov Əli oğlu", "license_no": "AZE12345", "phone": "050-111-22-33", "start_date": "2023-10-28"},
-    {"id": 102, "name": "Nigar Əliyeva Zaur qızı", "license_no": "AZE67890", "phone": "051-444-55-66", "start_date": "2024-05-15"},
-    {"id": 103, "name": "Rəşad Həsənov Samir oğlu", "license_no": "AZE10111", "phone": "055-777-88-99", "start_date": None}, 
-    {"id": 104, "name": "Nurlan Seyfiyev Cəyanət", "license_no": "", "phone": "050-XXX-XX-XX", "start_date": "2025-09-01"}, 
-]
-
-# Köməkçi və Planlamaçı kataloqları
-ASSISTANTS_DATA = [
-    {"id": 201, "name": "Vahid Vahidli"} 
-]
-PLANNERS_DATA = [
-    {"id": 301, "name": "Asif Atabəyov"} 
-]
-
 def _next_id(seq, start):
     return (max([x["id"] for x in seq]) + 1) if seq else start
-
-# Avtomobil Məlumatları
-CARS_DATA = [
-    {"id": 1, "driver_id": 101, "car_number": "99-XX-001", "model": "Toyota Prius", 
-     "brand": "Toyota", "model_name": "Prius", "category": "Sedan", "assistant_id": None, "planner_id": None, "notes": ""},
-    {"id": 2, "driver_id": 102, "car_number": "90-ZZ-999", "model": "Kia Optima", 
-     "brand": "Kia", "model_name": "Optima", "category": "Sedan", "assistant_id": None, "planner_id": 301, "notes": ""},
-    {"id": 3, "driver_id": None, "car_number": "10-RA-321", "model": "Ford Transit", 
-     "brand": "Ford", "model_name": "Transit", "category": "Minik Avtomobili", "assistant_id": 201, "planner_id": 301, "notes": ""},
-]
 
 # Xərc Məlumatları
 EXPENSES = [
@@ -104,12 +78,36 @@ def log_action(action, details, status='success'):
         print(f"!!! Loq xətası: {e}")
 
 def get_car_by_id(car_id):
-    car_id = int(car_id) if car_id else None 
-    return next((car for car in CARS_DATA if car['id'] == car_id), None)
-
+    if not car_id:
+        return None
+    conn = get_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                SELECT id, car_number, model, brand, model_name, category,
+                       driver_id, assistant_id, planner_id, notes
+                FROM cars
+                WHERE id = %s
+            """, (car_id,))
+            row = cursor.fetchone()
+    finally:
+        conn.close()
+    return row
 def get_driver_by_id(driver_id):
-    driver_id = int(driver_id) if driver_id else None
-    return next((driver for driver in DRIVERS_DATA if driver['id'] == driver_id), None)
+    if not driver_id:
+        return None
+    conn = get_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                SELECT id, name, license_no, phone, start_date
+                FROM drivers
+                WHERE id = %s
+            """, (driver_id,))
+            row = cursor.fetchone()
+    finally:
+        conn.close()
+    return row
 
 def get_user_by_id(user_id):
     """Istifadəçini ID-yə görə MySQL-dən götürür."""
@@ -178,12 +176,36 @@ def get_user_by_username(username):
 
 
 def get_assistant_by_id(aid):
-    aid = int(aid) if aid is not None and aid != "" else None
-    return next((a for a in ASSISTANTS_DATA if a['id'] == aid), None)
+    if not aid:
+        return None
+    conn = get_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                SELECT id, name
+                FROM assistants
+                WHERE id = %s
+            """, (aid,))
+            row = cursor.fetchone()
+    finally:
+        conn.close()
+    return row
 
 def get_planner_by_id(pid):
-    pid = int(pid) if pid is not None and pid != "" else None
-    return next((p for p in PLANNERS_DATA if p['id'] == pid), None)
+    if not pid:
+        return None
+    conn = get_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                SELECT id, name
+                FROM planners
+                WHERE id = %s
+            """, (pid,))
+            row = cursor.fetchone()
+    finally:
+        conn.close()
+    return row
 
 def _derive_brand_and_model(car):
     brand = car.get('brand') or ""
@@ -195,43 +217,76 @@ def _derive_brand_and_model(car):
     return brand, model_name
 
 def get_dashboard_data():
+    # Bütün kataloqları DB-dən çək
+    drivers = get_all_drivers()
+    assistants = get_all_assistants()
+    planners = get_all_planners()
+    cars = get_all_cars()
+
+    driver_map = {d["id"]: d for d in drivers}
+    assistant_map = {a["id"]: a for a in assistants}
+    planner_map = {p["id"]: p for p in planners}
+
     full_data = []
-    for car in CARS_DATA:
-        driver = get_driver_by_id(car['driver_id'])
-        car_expenses = [e for e in EXPENSES if e['car_id'] == car['id']]
-        total_expense = sum(e['amount'] for e in car_expenses)
-        last_expense_entered_by = car_expenses[-1]['entered_by'] if car_expenses else "Yoxdur"
-        
+    for car in cars:
+        car_id = car["id"]
+        car_expenses = [e for e in EXPENSES if e["car_id"] == car_id]
+        total_expense = sum(e["amount"] for e in car_expenses)
+        last_expense_entered_by = car_expenses[-1]["entered_by"] if car_expenses else "Yoxdur"
+
         detailed_expenses = []
-        for e in sorted(car_expenses, key=lambda x: x['timestamp'], reverse=True):
-            driver_at_expense = get_driver_by_id(e.get('driver_id_at_expense'))
-            assistant_at_expense = get_assistant_by_id(e.get('assistant_id_at_expense'))
-            planner_at_expense = get_planner_by_id(e.get('planner_id_at_expense'))
+        for e in sorted(car_expenses, key=lambda x: x["timestamp"], reverse=True):
+            driver_at_expense = get_driver_by_id(e.get("driver_id_at_expense"))
+            assistant_at_expense = get_assistant_by_id(e.get("assistant_id_at_expense"))
+            planner_at_expense = get_planner_by_id(e.get("planner_id_at_expense"))
             detailed_expenses.append({
-                "type": e['type'], "amount": e['amount'], "litr": e.get('litr', 0), 
-                "description": e['description'], "entered_by": e['entered_by'],
-                "timestamp_str": e['timestamp'].strftime('%d.%m.%Y %H:%M'),
-                "driver_name": driver_at_expense['name'] if driver_at_expense else "-",
-                "assistant_name": assistant_at_expense['name'] if assistant_at_expense else "-",
-                "planner_name": planner_at_expense['name'] if planner_at_expense else "-"
+                "type": e["type"],
+                "amount": e["amount"],
+                "litr": e.get("litr", 0),
+                "description": e["description"],
+                "entered_by": e["entered_by"],
+                "timestamp_str": e["timestamp"].strftime("%d.%m.%Y %H:%M"),
+                "driver_name": driver_at_expense["name"] if driver_at_expense else "-",
+                "assistant_name": assistant_at_expense["name"] if assistant_at_expense else "-",
+                "planner_name": planner_at_expense["name"] if planner_at_expense else "-",
             })
-            
-        brand, model_name = _derive_brand_and_model(car)
-        assistant = get_assistant_by_id(car.get('assistant_id'))
-        planner = get_planner_by_id(car.get('planner_id'))
-        
+
+        # brand/model_name üçün köhnə məntiqi saxlayırıq
+        brand = car.get("brand") or ""
+        model_name = car.get("model_name") or ""
+        if (not brand or not model_name) and car.get("model"):
+            parts = car["model"].split(" ", 1)
+            if not brand and parts:
+                brand = parts[0]
+            if not model_name and len(parts) > 1:
+                model_name = parts[1]
+
+        driver = driver_map.get(car.get("driver_id"))
+        assistant = assistant_map.get(car.get("assistant_id"))
+        planner = planner_map.get(car.get("planner_id"))
+
         full_data.append({
-            "id": car['id'], "driver_id": car['driver_id'], "car_number": car['car_number'],
-            "brand_model": f"{brand} / {model_name}".strip(" /"), "category": car.get('category', ""),
-            "assistant_name": assistant['name'] if assistant else "", "planner_name": planner['name'] if planner else "",
-            "driver_name": driver['name'] if driver else "TƏYİN OLUNMAYIB",
-            "total_expense": total_expense, "entered_by": last_expense_entered_by, 
-            "notes": car.get('notes', ""), "expenses": detailed_expenses,
-            "brand_raw": brand, "model_name_raw": model_name,
-            "assistant_id": car.get('assistant_id'), "planner_id": car.get('planner_id'),
+            "id": car_id,
+            "driver_id": car.get("driver_id"),
+            "car_number": car["car_number"],
+            "brand_model": f"{brand} / {model_name}".strip(" /"),
+            "category": car.get("category", ""),
+            "assistant_name": assistant["name"] if assistant else "",
+            "planner_name": planner["name"] if planner else "",
+            "driver_name": driver["name"] if driver else "TƏYİN OLUNMAYIB",
+            "total_expense": total_expense,
+            "entered_by": last_expense_entered_by,
+            "notes": car.get("notes", ""),
+            "expenses": detailed_expenses,
+            "brand_raw": brand,
+            "model_name_raw": model_name,
+            "assistant_id": car.get("assistant_id"),
+            "planner_id": car.get("planner_id"),
             "has_expenses": total_expense > 0
         })
+
     return full_data
+
 
 def calculate_experience(start_date_str):
     if not start_date_str: return "-"
@@ -495,12 +550,13 @@ def update_car_meta():
 @operator_required
 def admin_drivers():
     log_action('VIEW_PAGE', 'Sürücü idarəetmə səhifəsinə baxış', 'success')
+    drivers_db = get_all_drivers()
     drivers_processed = []
-    for driver in DRIVERS_DATA:
-        driver_copy = driver.copy() 
-        driver_copy['has_expenses'] = any(e.get('driver_id_at_expense') == driver_copy['id'] for e in EXPENSES)
-        driver_copy['experience_str'] = calculate_experience(driver_copy.get('start_date'))
-        drivers_processed.append(driver_copy)
+    for driver in drivers_db:
+        d = dict(driver)
+        d['has_expenses'] = any(e.get('driver_id_at_expense') == d['id'] for e in EXPENSES)
+        d['experience_str'] = calculate_experience(d.get('start_date').strftime('%Y-%m-%d') if d.get('start_date') else None)
+        drivers_processed.append(d)
     return render_template('admin_drivers.html', drivers=drivers_processed)
 
 @app.route('/admin/cars')
@@ -621,30 +677,46 @@ def add_driver():
     name = request.form.get('name', '').strip()
     license_no = request.form.get('license_no', '').strip()
     phone = request.form.get('phone', '').strip()
-    start_date = request.form.get('start_date', '').strip() 
+    start_date = request.form.get('start_date', '').strip()
 
     if not name:
         flash("Sürücü adı mütləq daxil edilməlidir.", "danger")
         return redirect(url_for('admin_drivers'))
 
-    if license_no and any(d['license_no'] == license_no for d in DRIVERS_DATA if d.get('license_no')):
-        log_action('ADD_DRIVER_FAILURE', f"Təkrarlanan vəsiqə nömrəsi: {license_no}", 'failure')
-        flash(f"'{license_no}' vəsiqə nömrəsi artıq sistemdə mövcuddur.", 'danger')
-        return redirect(url_for('admin_drivers'))
-        
-    if start_date:
-        try: datetime.strptime(start_date, '%Y-%m-%d')
-        except ValueError:
-            flash("İşə başlama tarixi formatı yanlışdır (YYYY-MM-DD olmalıdır).", "warning")
-            start_date = None 
+    # License no unik
+    conn = get_connection()
+    try:
+        with conn.cursor() as cursor:
+            if license_no:
+                cursor.execute("SELECT id FROM drivers WHERE license_no = %s", (license_no,))
+                if cursor.fetchone():
+                    log_action('ADD_DRIVER_FAILURE', f"Təkrarlanan vəsiqə nömrəsi: {license_no}", 'failure')
+                    flash(f"'{license_no}' vəsiqə nömrəsi artıq sistemdə mövcuddur.", 'danger')
+                    return redirect(url_for('admin_drivers'))
 
-    DRIVERS_DATA.append({
-        "id": _next_id(DRIVERS_DATA, 101), "name": name, "license_no": license_no, 
-        "phone": phone, "start_date": start_date 
-    })
+            if start_date:
+                try:
+                    datetime.strptime(start_date, '%Y-%m-%d')
+                except ValueError:
+                    flash("İşə başlama tarixi formatı yanlışdır (YYYY-MM-DD olmalıdır).", "warning")
+                    start_date_db = None
+                else:
+                    start_date_db = start_date
+            else:
+                start_date_db = None
+
+            cursor.execute("""
+                INSERT INTO drivers (name, license_no, phone, start_date)
+                VALUES (%s, %s, %s, %s)
+            """, (name, license_no, phone, start_date_db))
+        conn.commit()
+    finally:
+        conn.close()
+
     log_action('ADD_DRIVER_SUCCESS', f"Yeni sürücü əlavə edildi: {name}", 'success')
     flash(f"Sürücü '{name}' əlavə edildi.", 'success')
     return redirect(url_for('admin_drivers'))
+
 
 @app.route('/admin/cars/add', methods=['POST'])
 @operator_required
@@ -671,15 +743,31 @@ def delete_driver(id):
     if any(e.get('driver_id_at_expense') == id for e in EXPENSES):
         log_action('DELETE_DRIVER_FAILURE', f"Sürücü silinə bilmədi (xərc mövcuddur): ID {id}", 'failure')
         flash('Bu sürücü silinə bilməz! Sürücüyə aid aktiv xərc məlumatı mövcuddur.', 'danger')
-        return redirect(url_for('admin_drivers')) 
+        return redirect(url_for('admin_drivers'))
+
     driver = get_driver_by_id(id)
-    if driver: 
+    if driver:
         name = driver['name']
-        DRIVERS_DATA.remove(driver)
-        [car.update({'driver_id': None}) for car in CARS_DATA if car['driver_id'] == id]
+        conn = get_connection()
+        try:
+            with conn.cursor() as cursor:
+                # Avtomobillərdə bu sürücü təyin olunubsa, null et
+                cursor.execute("""
+                    UPDATE cars
+                    SET driver_id = NULL
+                    WHERE driver_id = %s
+                """, (id,))
+                # Sürücünü sil
+                cursor.execute("DELETE FROM drivers WHERE id = %s", (id,))
+            conn.commit()
+        finally:
+            conn.close()
+
         log_action('DELETE_DRIVER_SUCCESS', f"Sürücü silindi: {name} (ID: {id})", 'success')
         flash(f"Sürücü '{name}' silindi.", 'success')
+
     return redirect(url_for('admin_drivers'))
+
 
 @app.route('/admin/car/delete/<int:id>', methods=['POST'])
 @operator_required
@@ -703,29 +791,61 @@ def delete_car(id):
 @operator_required
 def edit_driver(id):
     driver = get_driver_by_id(id)
-    if not driver: return redirect(url_for('admin_drivers'))
-    
-    if request.method == 'POST': 
-        old_name = driver['name']
-        driver['name'] = request.form['name']
-        driver['license_no'] = request.form.get('license_no', '') 
-        driver['phone'] = request.form['phone']
-        start_date = request.form.get('start_date', '').strip() 
-        
-        if start_date:
-            try:
-                datetime.strptime(start_date, '%Y-%m-%d')
-                driver['start_date'] = start_date 
-            except ValueError:
-                flash("İşə başlama tarixi formatı yanlışdır (YYYY-MM-DD olmalıdır). Tarix yenilənmədi.", "warning")
-        else:
-             driver['start_date'] = None 
-        
-        log_action('EDIT_DRIVER', f"Sürücü məlumatları yeniləndi: '{old_name}' -> '{driver['name']}' (ID: {id})", 'success')
-        flash(f"Sürücü '{driver['name']}' məlumatları yeniləndi.", 'success')
+    if not driver:
         return redirect(url_for('admin_drivers'))
-        
+
+    if request.method == 'POST':
+        name = request.form.get('name', '').strip()
+        license_no = request.form.get('license_no', '').strip()
+        phone = request.form.get('phone', '').strip()
+        start_date = request.form.get('start_date', '').strip()
+
+        if not name:
+            flash("Sürücü adı mütləq daxil edilməlidir.", "danger")
+            return render_template('edit_driver.html', driver=driver)
+
+        conn = get_connection()
+        try:
+            with conn.cursor() as cursor:
+                # License no unikliyi yoxla
+                if license_no:
+                    cursor.execute("""
+                        SELECT id FROM drivers
+                        WHERE license_no = %s AND id <> %s
+                    """, (license_no, id))
+                    if cursor.fetchone():
+                        flash(f"'{license_no}' vəsiqə nömrəsi artıq başqa sürücüdə var.", 'danger')
+                        return render_template('edit_driver.html', driver=driver)
+
+                if start_date:
+                    try:
+                        datetime.strptime(start_date, '%Y-%m-%d')
+                    except ValueError:
+                        flash("İşə başlama tarixi formatı yanlışdır (YYYY-MM-DD olmalıdır). Tarix yenilənmədi.", "warning")
+                        start_date_db = driver.get('start_date')
+                    else:
+                        start_date_db = start_date
+                else:
+                    start_date_db = None
+
+                cursor.execute("""
+                    UPDATE drivers
+                    SET name = %s,
+                        license_no = %s,
+                        phone = %s,
+                        start_date = %s
+                    WHERE id = %s
+                """, (name, license_no, phone, start_date_db, id))
+            conn.commit()
+        finally:
+            conn.close()
+
+        log_action('EDIT_DRIVER', f"Sürücü məlumatları yeniləndi: '{driver['name']}' -> '{name}' (ID: {id})", 'success')
+        flash(f"Sürücü '{name}' məlumatları yeniləndi.", 'success')
+        return redirect(url_for('admin_drivers'))
+
     return render_template('edit_driver.html', driver=driver)
+
 
 @app.route('/admin/car/edit/<int:id>', methods=['GET', 'POST'])
 @operator_required
@@ -752,33 +872,62 @@ def edit_car(id):
 @operator_required
 def bulk_add_driver():
     bulk_data = request.form.get('bulk_data', '')
-    added_count = 0; skipped_count = 0
-    next_driver_id = _next_id(DRIVERS_DATA, 101)
-    existing_licenses = {d['license_no'] for d in DRIVERS_DATA if d.get('license_no')}
+    added_count = 0
+    skipped_count = 0
 
-    for line in bulk_data.splitlines():
-        if not line.strip(): continue 
-        parts = line.split(';');
-        if not parts: continue
-        name = parts[0].strip()
-        if not name: skipped_count += 1; continue 
-        license_no = parts[1].strip() if len(parts) > 1 else ""
-        phone = parts[2].strip() if len(parts) > 2 else ""
-        start_date = parts[3].strip() if len(parts) > 3 else None 
-        if start_date:
-            try: datetime.strptime(start_date, '%Y-%m-%d')
-            except ValueError: start_date = None 
-        if license_no and license_no in existing_licenses:
-            skipped_count += 1; continue
-            
-        new_driver = {"id": next_driver_id, "name": name, "license_no": license_no, "phone": phone, "start_date": start_date }
-        DRIVERS_DATA.append(new_driver)
-        if license_no: existing_licenses.add(license_no)
-        next_driver_id += 1; added_count += 1
-            
+    conn = get_connection()
+    try:
+        with conn.cursor() as cursor:
+            # mövcud license-lər
+            cursor.execute("SELECT license_no FROM drivers WHERE license_no IS NOT NULL AND license_no <> ''")
+            existing_licenses = {row["license_no"] for row in cursor.fetchall()}
+
+            for line in bulk_data.splitlines():
+                if not line.strip():
+                    continue
+                parts = line.split(';')
+                if not parts:
+                    continue
+
+                name = parts[0].strip()
+                if not name:
+                    skipped_count += 1
+                    continue
+
+                license_no = parts[1].strip() if len(parts) > 1 else ""
+                phone = parts[2].strip() if len(parts) > 2 else ""
+                start_date = parts[3].strip() if len(parts) > 3 else None
+
+                if start_date:
+                    try:
+                        datetime.strptime(start_date, '%Y-%m-%d')
+                    except ValueError:
+                        start_date_db = None
+                    else:
+                        start_date_db = start_date
+                else:
+                    start_date_db = None
+
+                if license_no and license_no in existing_licenses:
+                    skipped_count += 1
+                    continue
+
+                cursor.execute("""
+                    INSERT INTO drivers (name, license_no, phone, start_date)
+                    VALUES (%s, %s, %s, %s)
+                """, (name, license_no, phone, start_date_db))
+                if license_no:
+                    existing_licenses.add(license_no)
+                added_count += 1
+
+        conn.commit()
+    finally:
+        conn.close()
+
     log_action('BULK_ADD_DRIVER', f"{added_count} sürücü toplu əlavə edildi, {skipped_count} sətir ötürüldü.", 'success')
     flash(f"{added_count} sürücü uğurla əlavə edildi. {skipped_count} sətir (təkrarlanan vəsiqə və ya səhv format) ötürüldü.", 'success')
     return redirect(url_for('admin_drivers'))
+
 
 @app.route('/admin/cars/bulk_add', methods=['POST'])
 @operator_required
@@ -1024,22 +1173,37 @@ def admin_reports():
         except ValueError: 
             flash("Bitmə tarix formatı yanlışdır (YYYY-MM-DD olmalıdır).", "warning")
 
-    total_amount = sum(e['expense']['amount'] for e in filtered_expenses)
+        total_amount = sum(e['expense']['amount'] for e in filtered_expenses)
+
+    # BUNLAR ARTIQ DB-DƏN GƏLİR
     operators = get_operators()
+    drivers = get_all_drivers()
+    cars = get_all_cars()
+    assistants = get_all_assistants()
+    planners = get_all_planners()
 
     return render_template(
-        'admin_reports.html', 
-        reports=sorted(filtered_expenses, key=lambda x: x['expense']['timestamp'], reverse=True), 
+        'admin_reports.html',
+        reports=sorted(filtered_expenses, key=lambda x: x['expense']['timestamp'], reverse=True),
         total_amount=total_amount,
-        drivers=DRIVERS_DATA, cars=CARS_DATA, operators=operators, 
-        assistants=ASSISTANTS_DATA, planners=PLANNERS_DATA, 
-        expense_types=EXPENSE_TYPES, 
-        selected_filters={ 
-            'car_id': f_car_id, 'driver_id': f_driver_id, 'assistant_id': f_assistant_id, 'planner_id': f_planner_id, 
-            'user_username': f_user_username, 'expense_type': f_expense_type, 
-            'start_date': f_start_date_str, 'end_date': f_end_date_str
+        drivers=drivers,
+        cars=cars,
+        operators=operators,
+        assistants=assistants,
+        planners=planners,
+        expense_types=EXPENSE_TYPES,
+        selected_filters={
+            'car_id': f_car_id,
+            'driver_id': f_driver_id,
+            'assistant_id': f_assistant_id,
+            'planner_id': f_planner_id,
+            'user_username': f_user_username,
+            'expense_type': f_expense_type,
+            'start_date': f_start_date_str,
+            'end_date': f_end_date_str
         }
     )
+
 
 # ----------------------------------------------------
 # 10. ADMİN FUNKSİYALARI (XƏRC SİLMƏ VƏ BƏRPA)
