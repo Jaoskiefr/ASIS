@@ -1,3 +1,4 @@
+from db import get_connection
 from flask import Flask, render_template, request, redirect, url_for, session, flash
 from datetime import datetime, timedelta # <--- YENİ: timedelta ƏLAVƏ EDİLDİ
 from dateutil.relativedelta import relativedelta # Tarix fərqini hesablamaq üçün
@@ -119,11 +120,70 @@ def get_driver_by_id(driver_id):
     return next((driver for driver in DRIVERS_DATA if driver['id'] == driver_id), None)
 
 def get_user_by_id(user_id):
-    user_id = int(user_id) if user_id else None
-    return next((user for user in USERS if user['id'] == user_id), None)
+    """Istifadəçini ID-yə görə MySQL-dən götürür."""
+    if not user_id:
+        return None
+
+    conn = get_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT id, fullname, username, password, role, is_active
+                FROM users
+                WHERE id = %s
+                """,
+                (user_id,)
+            )
+            row = cursor.fetchone()
+    finally:
+        conn.close()
+
+    if not row:
+        return None
+
+    return {
+        "id": row["id"],
+        "fullname": row["fullname"],
+        "username": row["username"],
+        "password": row["password"],
+        "role": row["role"],
+        "is_active": bool(row["is_active"]),
+    }
+
 
 def get_user_by_username(username):
-    return next((user for user in USERS if user['username'] == username), None)
+    """Istifadəçini username-ə görə MySQL-dən götürür."""
+    if not username:
+        return None
+
+    conn = get_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT id, fullname, username, password, role, is_active
+                FROM users
+                WHERE username = %s
+                """,
+                (username,)
+            )
+            row = cursor.fetchone()
+    finally:
+        conn.close()
+
+    if not row:
+        return None
+
+    return {
+        "id": row["id"],
+        "fullname": row["fullname"],
+        "username": row["username"],
+        "password": row["password"],
+        "role": row["role"],
+        "is_active": bool(row["is_active"]),
+    }
+
 
 def get_assistant_by_id(aid):
     aid = int(aid) if aid is not None and aid != "" else None
