@@ -1,7 +1,7 @@
 from db import get_connection
 from flask import Flask, render_template, request, redirect, url_for, session, flash
-from datetime import datetime, timedelta # <--- YENİ: timedelta ƏLAVƏ EDİLDİ
-from dateutil.relativedelta import relativedelta # Tarix fərqini hesablamaq üçün
+from datetime import datetime, timedelta
+from dateutil.relativedelta import relativedelta
 from functools import wraps # Dekoratorlar üçün
 import socket # <--- KOMPYUTER ADINI ALMAQ ÜÇÜN İMPORT
 
@@ -52,9 +52,7 @@ def insert_expense(car_id, expense_type, amount, litr, description,
     finally:
         conn.close()
 
-# ----------------------------------------------------
-# 3. KÖMƏKÇİ FUNKSİYALARI (LOGGING YENİLƏNDİ)
-# ----------------------------------------------------
+
 
 def log_action(action, details, status='success'):
     """Audit loqu qeydə alır (YENİLƏNİB - Kompyuter adı ilə)."""
@@ -444,9 +442,7 @@ def calculate_experience(start_date_str):
         return ", ".join(experience_parts)
     except ValueError: return "Tarix xətası" 
 
-# ----------------------------------------------------
-# 4. GİRİŞ VƏ İCAZƏ FUNKSİYALARI (YENİLƏNİB)
-# ----------------------------------------------------
+
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
@@ -536,9 +532,7 @@ def supervisor_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
-# ----------------------------------------------------
-# 5. ƏSAS SƏHİFƏ (DASHBOARD) - YENİLƏNİB
-# ----------------------------------------------------
+
 @app.route('/')
 @login_required
 def index():
@@ -627,10 +621,7 @@ def index():
     )
 
 
-# ----------------------------------------------------
-# 6. OPERATOR FUNKSİYALARI (CRUD Əməliyyatları)
-# BÜTÜN FUNKSİYALAR @operator_required İLƏ QORUNUR VƏ LOGGING ƏLAVƏ EDİLİR
-# ----------------------------------------------------
+
 @app.route('/add_expense', methods=['POST'])
 @operator_required
 def add_expense():
@@ -749,9 +740,6 @@ def update_car_meta():
                'success')
     flash('Avtomobil məlumatları yeniləndi.', 'success')
     return redirect(url_for('index'))
-
-
-# --- Operatorun İdarəetmə Səhifələri ---
 
 @app.route('/admin/drivers')
 @operator_required
@@ -1307,12 +1295,6 @@ def edit_car(id):
     drivers = get_all_drivers()
     return render_template('edit_car.html', car=car, drivers=drivers)
 
-
-
-# ----------------------------------------------------
-# 7. TOPLU ƏLAVƏ ETMƏ FUNKSİYALARI (LOGGING ƏLAVƏ EDİLDİ)
-# ----------------------------------------------------
-
 @app.route('/admin/cars/bulk_add', methods=['POST'])
 @operator_required
 def bulk_add_car():
@@ -1450,9 +1432,6 @@ def bulk_add_planner():
     return redirect(url_for('admin_planners'))
 
 
-# ----------------------------------------------------
-# 8. YALNIZ ADMİN FUNKSİYALARI (İstifadəçi İdarəetməsi)
-# ----------------------------------------------------
 @app.route('/admin/users')
 @admin_required
 def admin_users():
@@ -1576,10 +1555,6 @@ def delete_user(id):
         flash('Admin başqa Admini və ya Supervisoru silə bilməz.', 'danger')
     return redirect(url_for('admin_users'))
 
-
-# ----------------------------------------------------
-# 9. HESABATLAR (Yalnız Admin üçün) - YENİLƏNDİ
-# ----------------------------------------------------
 @app.route('/admin/reports', methods=['GET'])
 @admin_required
 def admin_reports():
@@ -1594,9 +1569,6 @@ def admin_reports():
     f_start_date_str = request.args.get('start_date', type=str)
     f_end_date_str = request.args.get('end_date', type=str)
     
-    # ==========================================================
-    # YENİ MƏNTİQ: Default olaraq son 2 günü göstər
-    # ==========================================================
     if not f_start_date_str and not f_end_date_str:
         start_date = datetime.now().date() - timedelta(days=2)
         f_start_date_str = start_date.strftime('%Y-%m-%d')
@@ -1671,11 +1643,6 @@ def admin_reports():
         }
     )
 
-
-# ----------------------------------------------------
-# 10. ADMİN FUNKSİYALARI (XƏRC SİLMƏ VƏ BƏRPA)
-# ----------------------------------------------------
-
 @app.route('/admin/expense/delete/<int:id>', methods=['POST'])
 @admin_required
 def delete_expense(id):
@@ -1740,10 +1707,6 @@ def admin_deleted_reports():
         'admin_deleted_reports.html', 
         reports=sorted(all_expenses_enriched, key=lambda x: x['expense']['deleted_at'], reverse=True)
     )
-
-# ----------------------------------------------------
-# 11. YENİ SUPERVISOR FUNKSİYALARI (DASHBOARD VƏ REPORTS YENİLƏNDİ)
-# ----------------------------------------------------
 
 @app.route('/supervisor/dashboard')
 @supervisor_required
@@ -2006,9 +1969,5 @@ def supervisor_delete_user(id):
 
     return redirect(url_for('supervisor_operations'))
 
-
-# ----------------------------------------------------
-# 12. TƏTBİQİ BAŞLATMA
-# ----------------------------------------------------
 if __name__ == '__main__':
     app.run(debug=True)
