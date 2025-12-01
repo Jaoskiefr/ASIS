@@ -591,6 +591,77 @@ def add_driver():
     flash('Sürücü əlavə edildi', 'success')
     return redirect(url_for('admin_drivers'))
 
+@app.route('/admin/drivers/bulk_add', methods=['POST'])
+@operator_required
+def bulk_add_driver():
+    bulk_data = request.form.get('bulk_data', '')
+    added_count = 0
+    skipped_count = 0
+
+    conn = get_connection()
+    try:
+        with conn.cursor() as cursor:
+            # Mövcud sürücü adlarını (lowercase) götürürük
+            cursor.execute("SELECT name FROM drivers")
+            existing_drivers = {row['name'].lower() for row in cursor.fetchall()}
+
+            for line in bulk_data.splitlines():
+                if not line.strip():
+                    continue
+
+                parts = [p.strip() for p in line.split(';')]
+                if not parts:
+                    skipped_count += 1
+                    continue
+
+                name = parts[0]
+                license_no = parts[1] if len(parts) > 1 else ''
+                phone = parts[2] if len(parts) > 2 else ''
+                start_date = parts[3] if len(parts) > 3 else ''
+
+                if not name:
+                    skipped_count += 1
+                    continue
+
+                lower_name = name.lower()
+                if lower_name in existing_drivers:
+                    skipped_count += 1
+                    continue
+
+                # Tarixi yoxlayaq (YYYY-MM-DD olmasa, None yazırıq)
+                start_date_db = None
+                if start_date:
+                    try:
+                        datetime.strptime(start_date, '%Y-%m-%d')
+                        start_date_db = start_date
+                    except ValueError:
+                        start_date_db = None
+
+                cursor.execute("""
+                    INSERT INTO drivers (name, license_no, phone, start_date)
+                    VALUES (%s, %s, %s, %s)
+                """, (name, license_no, phone, start_date_db))
+
+                existing_drivers.add(lower_name)
+                added_count += 1
+
+        conn.commit()
+    finally:
+        conn.close()
+
+    log_action(
+        'BULK_ADD_DRIVER',
+        f"{added_count} sürücü toplu əlavə edildi, {skipped_count} sətir ötürüldü.",
+        'success'
+    )
+    flash(
+        f"{added_count} sürücü uğurla əlavə edildi. "
+        f"{skipped_count} sətir (təkrarlanan ad, boş sətir və ya səhv format) ötürüldü.",
+        'success'
+    )
+    return redirect(url_for('admin_drivers'))
+
+
 @app.route('/admin/driver/edit/<int:id>', methods=['GET', 'POST'])
 @operator_required
 def edit_driver(id):
