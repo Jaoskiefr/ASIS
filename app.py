@@ -1932,4 +1932,4 @@ def supervisor_delete_user(id):
     return redirect(url_for('supervisor_operations'))
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=True, host='0.0.0.0', port=5000)
