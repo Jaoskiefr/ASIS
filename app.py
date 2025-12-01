@@ -1130,7 +1130,7 @@ def delete_driver(id):
 
     return redirect(url_for('admin_drivers'))
 
-
+app.view_functions.pop('delete_car', None)
 @app.route('/admin/car/delete/<int:id>', methods=['POST'])
 @operator_required
 
