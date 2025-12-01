@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from db import get_connection
 from flask import Flask, render_template, request, redirect, url_for, session, flash
-from datetime import datetime, timedelta
+from datetime import datetime, date, timedelta
 from dateutil.relativedelta import relativedelta
 from functools import wraps
 import socket
@@ -186,7 +186,7 @@ def insert_expense(car_id, expense_type, amount, litr, description,
                     created_at, is_deleted
                 )
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), 0)
-            """, (car_id, expense_type, amount, litr, description, entered_by, driver_id, assistant_id, planner_id))
+            """, (int(car_id), expense_type, float(amount), float(litr), description, entered_by, driver_id, assistant_id, planner_id))
         conn.commit()
     finally:
         conn.close()
@@ -221,7 +221,7 @@ def get_dashboard_data():
                     if not brand and parts: brand = parts[0]
                     if not model_name and len(parts) > 1: model_name = parts[1]
 
-                # Xərcləri çək
+                # Xərcləri çək - Car ID integer olaraq ötürülür
                 cursor.execute("""
                     SELECT e.*, 
                            d.name as driver_name, 
@@ -233,7 +233,7 @@ def get_dashboard_data():
                     LEFT JOIN planners p ON e.planner_id_at_expense = p.id
                     WHERE e.car_id = %s AND e.is_deleted = 0
                     ORDER BY e.created_at DESC
-                """, (car['id'],))
+                """, (int(car['id']),))
                 expenses = cursor.fetchall()
                 
                 total_expense = sum(float(e['amount']) for e in expenses)
@@ -242,7 +242,13 @@ def get_dashboard_data():
                 processed_expenses = []
                 for e in expenses:
                     e_dict = dict(e)
-                    e_dict['timestamp_str'] = e['created_at'].strftime("%d.%m.%Y %H:%M")
+                    if isinstance(e['created_at'], str):
+                         # Əgər bazadan string gələrsə (bəzi konfiqlərdə olur)
+                         e_dict['timestamp_str'] = e['created_at']
+                    elif e['created_at']:
+                         e_dict['timestamp_str'] = e['created_at'].strftime("%d.%m.%Y %H:%M")
+                    else:
+                         e_dict['timestamp_str'] = "-"
                     processed_expenses.append(e_dict)
 
                 car_data = {
@@ -271,24 +277,65 @@ def get_dashboard_data():
     finally:
         conn.close()
 
-def calculate_experience(start_date_str):
-    if not start_date_str: return "-"
+def calculate_experience(start_date_input):
+    """
+    Tarixi hesablayan funksiya - Server xətalarını önləmək üçün
+    daha möhkəm (robust) yazıldı.
+    """
+    if not start_date_input:
+        return "-"
+    
     try:
-        if isinstance(start_date_str, str):
-            start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+        start_date = None
+        
+        # 1. Əgər input stringdirsə, onu date obyektinə çevir
+        if isinstance(start_date_input, str):
+            # Bəzi hallarda boş string gələ bilər
+            if start_date_input.strip() == "":
+                return "-"
+            try:
+                start_date = datetime.strptime(start_date_input, '%Y-%m-%d').date()
+            except ValueError:
+                # Fərqli format ola bilər və ya '0000-00-00'
+                return "Tarix xətası"
+        
+        # 2. Əgər datetime obyektidirsə (saat ilə), sadəcə tarixi götür
+        elif isinstance(start_date_input, datetime):
+            start_date = start_date_input.date()
+            
+        # 3. Əgər artıq date obyektidirsə, olduğu kimi saxla
+        elif isinstance(start_date_input, date):
+            start_date = start_date_input
+            
         else:
-            start_date = start_date_str # Əgər artıq date obyektidirsə
+            # Naməlum tip
+            return "-"
+
+        if not start_date:
+            return "-"
 
         today = datetime.now().date()
-        if start_date > today: return "Başlamayıb"
+        
+        if start_date > today:
+            return "Başlamayıb"
+            
         delta = relativedelta(today, start_date)
-        years = delta.years; months = delta.months
+        years = delta.years
+        months = delta.months
+        
         experience_parts = []
         if years > 0: experience_parts.append(f"{years} il")
         if months > 0: experience_parts.append(f"{months} ay")
-        if not experience_parts: return "Yeni" if delta.days >= 0 else "-" 
+        
+        if not experience_parts:
+            return "Yeni" if delta.days >= 0 else "-"
+            
         return ", ".join(experience_parts)
-    except ValueError: return "Tarix xətası"
+        
+    except Exception as e:
+        # Hər hansı digər xəta olarsa server çökməsin, sadəcə xəta yazsın
+        print(f"Experience calc error: {e}")
+        return "Xəta"
 
 # --- DEKORATORLAR ---
 
@@ -434,24 +481,31 @@ def index():
 @app.route('/add_expense', methods=['POST'])
 @operator_required
 def add_expense():
-    car_id = request.form.get('car_id')
-    expense_type = request.form.get('expense_type')
-    amount = float(request.form.get('amount', 0))
-    litr = float(request.form.get('litr', 0) or 0)
-    description = request.form.get('description', '')
-    fuel_subtype = request.form.get('fuel_subtype', '')
+    try:
+        car_id = request.form.get('car_id')
+        expense_type = request.form.get('expense_type')
+        amount = float(request.form.get('amount', 0))
+        litr = float(request.form.get('litr', 0) or 0)
+        description = request.form.get('description', '')
+        fuel_subtype = request.form.get('fuel_subtype', '')
 
-    if expense_type == 'Yanacaq' and fuel_subtype:
-        description = f"{fuel_subtype} - {description}" if description else fuel_subtype
+        if expense_type == 'Yanacaq' and fuel_subtype:
+            description = f"{fuel_subtype} - {description}" if description else fuel_subtype
 
-    car = get_car_by_id(car_id)
-    if car:
-        insert_expense(
-            car_id, expense_type, amount, litr, description,
-            car['driver_id'], car['assistant_id'], car['planner_id'], session['user']
-        )
-        log_action('ADD_EXPENSE', f"{car['car_number']} - {amount} AZN ({expense_type})", 'success')
-        flash('Xərc əlavə edildi.', 'success')
+        car = get_car_by_id(car_id)
+        if car:
+            insert_expense(
+                car_id, expense_type, amount, litr, description,
+                car['driver_id'], car['assistant_id'], car['planner_id'], session['user']
+            )
+            log_action('ADD_EXPENSE', f"{car['car_number']} - {amount} AZN ({expense_type})", 'success')
+            flash('Xərc əlavə edildi.', 'success')
+        else:
+            flash('Avtomobil tapılmadı.', 'danger')
+            
+    except Exception as e:
+        flash(f'Xəta baş verdi: {str(e)}', 'danger')
+        print(f"Add expense error: {e}")
     
     return redirect(url_for('index'))
 
@@ -503,9 +557,17 @@ def admin_drivers():
             
             # Xərci olub olmadığını yoxlayaq
             for d in drivers:
-                cursor.execute("SELECT id FROM expenses WHERE driver_id_at_expense=%s AND is_deleted=0 LIMIT 1", (d['id'],))
+                # Driver ID-ni integerə çevirək
+                driver_id = int(d['id'])
+                cursor.execute("SELECT id FROM expenses WHERE driver_id_at_expense=%s AND is_deleted=0 LIMIT 1", (driver_id,))
                 d['has_expenses'] = cursor.fetchone() is not None
-                d['experience_str'] = calculate_experience(d['start_date'])
+                
+                # Tarix hesablaması (səhvi tutmaq üçün qoruyucu içində)
+                d['experience_str'] = calculate_experience(d.get('start_date'))
+                
+    except Exception as e:
+        flash(f"Server xətası (Sürücülər): {str(e)}", "danger")
+        drivers = []
     finally:
         conn.close()
     return render_template('admin_drivers.html', drivers=drivers)
