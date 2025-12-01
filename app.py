@@ -1145,7 +1145,6 @@ def delete_driver(id):
 
     return redirect(url_for('admin_drivers'))
 
-app.view_functions.pop('delete_car', None)
 @app.route('/admin/car/delete/<int:id>', methods=['POST'])
 @operator_required
 
@@ -1945,6 +1944,57 @@ def supervisor_delete_user(id):
         flash(f"İstifadəçi '{name}' silindi.", 'success')
 
     return redirect(url_for('supervisor_operations'))
+@app.route('/admin/drivers/bulk_add', methods=['POST'])
+@operator_required
+def bulk_add_driver():
+    bulk_data = request.form.get('bulk_data', '')
+    added_count = 0
+    skipped_count = 0
 
+    conn = get_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT license_no FROM drivers WHERE license_no IS NOT NULL AND license_no != ''")
+            existing_licenses = {row['license_no'] for row in cursor.fetchall()}
+
+            for line in bulk_data.splitlines():
+                parts = line.split(';')
+                if not parts or not parts[0].strip():
+                    continue
+                
+                name = parts[0].strip()
+                # Digər sahələr varsa götür, yoxdursa boş string/None
+                license_no = parts[1].strip() if len(parts) > 1 else None
+                phone = parts[2].strip() if len(parts) > 2 else None
+                start_date = parts[3].strip() if len(parts) > 3 else None
+
+                # Vəsiqə nömrəsi varsa və təkrardırsa ötür
+                if license_no and license_no in existing_licenses:
+                    skipped_count += 1
+                    continue
+                
+                # Tarix formatı yoxlanışı (sadə)
+                if start_date:
+                    try:
+                        datetime.strptime(start_date, '%Y-%m-%d')
+                    except ValueError:
+                        start_date = None # Format səhvdirsə NULL yazsın
+
+                cursor.execute("""
+                    INSERT INTO drivers (name, license_no, phone, start_date) 
+                    VALUES (%s, %s, %s, %s)
+                """, (name, license_no, phone, start_date))
+                
+                if license_no:
+                    existing_licenses.add(license_no)
+                added_count += 1
+
+        conn.commit()
+    finally:
+        conn.close()
+
+    log_action('BULK_ADD_DRIVER', f"{added_count} sürücü toplu əlavə edildi.", 'success')
+    flash(f"{added_count} sürücü əlavə edildi, {skipped_count} təkrar/xətalı sətir ötürüldü.", 'success')
+    return redirect(url_for('admin_drivers'))
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
