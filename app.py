@@ -2,8 +2,8 @@ from db import get_connection
 from flask import Flask, render_template, request, redirect, url_for, session, flash
 from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
-from functools import wraps # Dekoratorlar üçün
-import socket # <--- KOMPYUTER ADINI ALMAQ ÜÇÜN İMPORT
+from functools import wraps
+import socket
 
 # ----------------------------------------------------
 # 1. FLASK TƏTBİQİNİN QURULMASI
