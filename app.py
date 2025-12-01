@@ -785,7 +785,50 @@ def restore_expense(id):
     flash('Xərc bərpa edildi.', 'success')
     return redirect(url_for('admin_deleted_reports'))
 
-# --- SUPERVISOR REPORTS ---
+# --- SUPERVISOR SECTION ---
+
+@app.route('/supervisor/dashboard')
+@supervisor_required
+def supervisor_dashboard():
+    conn = get_connection()
+    try:
+        with conn.cursor() as cursor:
+            # Statistika
+            cursor.execute("SELECT COUNT(*) as c FROM users")
+            total_users = cursor.fetchone()['c']
+            
+            cursor.execute("SELECT COUNT(*) as c FROM users WHERE is_active=1")
+            active_users = cursor.fetchone()['c']
+            
+            cursor.execute("SELECT COUNT(*) as c FROM users WHERE is_active=0")
+            passive_users = cursor.fetchone()['c']
+            
+            cursor.execute("SELECT COUNT(*) as c FROM audit_logs")
+            total_logs = cursor.fetchone()['c']
+            
+            # Chart data (Rollar üzrə)
+            cursor.execute("SELECT role, COUNT(*) as count FROM users GROUP BY role")
+            roles_data = cursor.fetchall()
+            
+            labels = [r['role'] for r in roles_data]
+            data = [r['count'] for r in roles_data]
+            
+            stats = {
+                'total_users': total_users,
+                'active_users': active_users,
+                'passive_users': passive_users,
+                'total_logs': total_logs
+            }
+            
+            chart_data = {
+                'labels': labels,
+                'data': data
+            }
+            
+    finally:
+        conn.close()
+
+    return render_template('supervisor_dashboard.html', stats=stats, chart_data=chart_data)
 
 @app.route('/supervisor/reports')
 @supervisor_required
