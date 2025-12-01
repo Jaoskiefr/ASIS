@@ -1,10 +1,10 @@
+# -*- coding: utf-8 -*-
 from db import get_connection
 from flask import Flask, render_template, request, redirect, url_for, session, flash
 from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
 from functools import wraps
 import socket
-
 
 app = Flask(__name__)
 app.secret_key = 'ASIS_Sizin_Real_Gizli_Acariniz_Burada_Olsun' 
