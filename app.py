@@ -12,9 +12,7 @@ app.secret_key = 'ASIS_Sizin_Real_Gizli_Acariniz_Burada_Olsun'
 def insert_expense(car_id, expense_type, amount, litr, description,
                    driver_id_at_expense, assistant_id_at_expense,
                    planner_id_at_expense, entered_by):
-    """
-    Yeni xərci MySQL-də expenses cədvəlinə yazır.
-    """
+
     conn = get_connection()
     try:
         with conn.cursor() as cursor:
@@ -49,7 +47,7 @@ def insert_expense(car_id, expense_type, amount, litr, description,
 
 
 def log_action(action, details, status='success'):
-    """Audit loqu qeydə alır (YENİLƏNİB - Kompyuter adı ilə)."""
+
     try:
         ip = request.remote_addr if request else '127.0.0.1'
         hostname = ip
@@ -148,7 +146,7 @@ def get_user_by_id(user_id):
 
 
 def get_user_by_username(username):
-    """Istifadəçini username-ə görə MySQL-dən götürür."""
+
     if not username:
         return None
 
@@ -213,7 +211,6 @@ def get_planner_by_id(pid):
     return row
 
 def get_all_drivers():
-    """Bütün sürücüləri DB-dən gətirir."""
     conn = get_connection()
     try:
         with conn.cursor() as cursor:
@@ -229,7 +226,6 @@ def get_all_drivers():
 
 
 def get_all_assistants():
-    """Bütün köməkçiləri DB-dən gətirir."""
     conn = get_connection()
     try:
         with conn.cursor() as cursor:
@@ -245,7 +241,6 @@ def get_all_assistants():
 
 
 def get_all_planners():
-    """Bütün planlamaçıları DB-dən gətirir."""
     conn = get_connection()
     try:
         with conn.cursor() as cursor:
@@ -261,7 +256,6 @@ def get_all_planners():
 
 
 def get_all_cars():
-    """Bütün avtomobilləri DB-dən gətirir."""
     conn = get_connection()
     try:
         with conn.cursor() as cursor:
@@ -287,7 +281,6 @@ def get_all_cars():
 
 
 def get_operators():
-    """Yalnız operatorları (role='user') gətirir."""
     conn = get_connection()
     try:
         with conn.cursor() as cursor:
@@ -314,7 +307,6 @@ def get_operators():
 
 
 def get_all_users():
-    """Bütün istifadəçiləri gətirir (supervisor üçün operations səhifəsində istifadə olunur)."""
     conn = get_connection()
     try:
         with conn.cursor() as cursor:
@@ -383,7 +375,7 @@ def get_dashboard_data():
                 "planner_name": planner_at_expense["name"] if planner_at_expense else "-",
             })
 
-        # brand/model_name üçün köhnə məntiqi saxlayırıq
+        
         brand = car.get("brand") or ""
         model_name = car.get("model_name") or ""
         if (not brand or not model_name) and car.get("model"):
@@ -445,7 +437,7 @@ def login():
         
         if user and user['password'] == password: 
             # YENİ: Aktivlik yoxlaması
-            if not user.get('is_active', True): # Əgər is_active yoxdursa, default olaraq True qəbul et
+            if not user.get('is_active', True): 
                 log_action('LOGIN_FAILURE', f"İstifadəçi '{username}' aktiv deyil.", 'failure')
                 flash('Sizin hesabınız deaktiv edilib. Zəhmət olmasa rəhbərliklə əlaqə saxlayın.', 'danger')
                 return render_template('login.html', error=None) # Flash mesajı istifadə olunduğu üçün error=None
@@ -457,10 +449,9 @@ def login():
             log_action('LOGIN_SUCCESS', f"İstifadəçi '{username}' daxil oldu.", 'success')
             flash(f"Xoş gəldiniz, {user['fullname']}!", 'success')
             
-            # YENİ: Rola görə yönləndirmə
+        
             if user['role'] == 'supervisor':
                 return redirect(url_for('supervisor_dashboard'))
-            # Admin və Operator əvvəlki kimi index-ə gedir
             return redirect(url_for('index'))
         else:
             log_action('LOGIN_FAILURE', f"İstifadəçi '{username}' üçün yanlış parol/istifadəçi adı.", 'failure')
@@ -482,11 +473,9 @@ def is_admin():
 def is_operator():
     return session.get('role') == 'user'
 
-# YENİ: Supervisor yoxlaması
 def is_supervisor():
     return session.get('role') == 'supervisor'
 
-# YENİ: İcazə dekoratorları
 def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
@@ -508,7 +497,7 @@ def admin_required(f):
 def operator_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        if not (is_operator() or is_admin() or is_supervisor()): # Operator, Admin və Supervisor bura daxil ola bilər
+        if not (is_operator() or is_admin() or is_supervisor()): 
             log_action('AUTH_FAILURE', f"Operator icazəsi olmayan cəhd: {request.path}", 'failure')
             flash('Bu səhifəyə daxil olmaq üçün icazəniz yoxdur.', 'danger')
             return redirect(url_for('index'))
@@ -529,11 +518,11 @@ def supervisor_required(f):
 @app.route('/')
 @login_required
 def index():
-    # Supervisor-u öz dashboardına yönləndir
+ 
     if session['role'] == 'supervisor':
         return redirect(url_for('supervisor_dashboard'))
     
-    # === ADMİN DASHBOARD MƏLUMATLARI ===
+
     if session['role'] == 'admin':
         log_action('VIEW_PAGE', 'Admin Dashboarduna baxış', 'success')
 
@@ -625,24 +614,20 @@ def add_expense():
     description = request.form.get('description', '')
     fuel_subtype = request.form.get('fuel_subtype', '')
 
-    # Yanacaq üçün subtype ilə birləşdirilmiş təsvir
     final_description = description
     if expense_type == 'Yanacaq' and fuel_subtype:
         final_description = f"{fuel_subtype} - {description}" if description else fuel_subtype
 
-    # Avtomobili DB-dən götür
     car = get_car_by_id(car_id)
     if not car:
         log_action('ADD_EXPENSE_FAILURE', f"Avtomobil tapılmadı (ID: {car_id})", 'failure')
         flash('Xərc əlavə edilərkən xəta baş verdi: Avtomobil tapılmadı.', 'danger')
         return redirect(url_for('index'))
 
-    # Xərc daxil edilən anda kimlər bu maşına bağlı idi
     driver_id_at_expense = car.get('driver_id')
     assistant_id_at_expense = car.get('assistant_id')
     planner_id_at_expense = car.get('planner_id')
 
-    # Məbləğ və litr-i rəqəmə çevir
     try:
         amount_val = float(amount)
     except (TypeError, ValueError):
@@ -654,7 +639,6 @@ def add_expense():
     except (TypeError, ValueError):
         litr_val = 0.0
 
-    # 🔹 Əsas hissə: artıq RAM-a yox, DB-yə yazırıq
     insert_expense(
         car_id=int(car_id),
         expense_type=expense_type,
@@ -798,7 +782,6 @@ def add_assistant():
     conn = get_connection()
     try:
         with conn.cursor() as cursor:
-            # təkrarlanan ad (case-insensitive)
             cursor.execute("SELECT id FROM assistants WHERE LOWER(name) = LOWER(%s)", (name,))
             if cursor.fetchone():
                 flash("Bu adda köməkçi artıq mövcuddur.", "danger")
@@ -1565,10 +1548,8 @@ def admin_reports():
     if not f_start_date_str and not f_end_date_str:
         start_date = datetime.now().date() - timedelta(days=2)
         f_start_date_str = start_date.strftime('%Y-%m-%d')
-    # ==========================================================
 
     all_expenses_enriched = []
-    # YALNIZ AKTİV EXPENSES SİYAHISINDAN GÖSTƏRİR
     for expense in EXPENSES:
         car = get_car_by_id(expense['car_id'])
         user = get_user_by_username(expense['entered_by']) 
@@ -1755,7 +1736,6 @@ def supervisor_dashboard():
 @app.route('/supervisor/reports')
 @supervisor_required
 def supervisor_reports():
-    """Bütün audit loqlarını göstərir (YENİLƏNİB - FİLTRLƏRLƏ)."""
     log_action('VIEW_PAGE', 'Supervisor -> Audit Raporları səhifəsinə baxış', 'success')
     
     # Filtr parametrlərini al
@@ -1766,20 +1746,16 @@ def supervisor_reports():
     f_start_date_str = request.args.get('start_date', type=str)
     f_end_date_str = request.args.get('end_date', type=str)
     
-    # ==========================================================
-    # YENİ MƏNTİQ: Default olaraq son 2 günü göstər
-    # ==========================================================
     if not f_start_date_str and not f_end_date_str:
         start_date = datetime.now().date() - timedelta(days=2)
         f_start_date_str = start_date.strftime('%Y-%m-%d')
-    # ==========================================================
+ 
     
-    # Filtrlər üçün unikal dəyərləri al
+
     all_usernames = sorted(list(set([log['username'] for log in AUDIT_LOGS])))
     all_actions = sorted(list(set([log['action'] for log in AUDIT_LOGS])))
     all_hostnames = sorted(list(set([log.get('hostname', log['ip']) for log in AUDIT_LOGS]))) # <--- YENİ
     
-    # Loqları filtrə sal
     filtered_logs = AUDIT_LOGS.copy()
     
     if f_username:
@@ -1826,7 +1802,6 @@ def supervisor_reports():
 @app.route('/supervisor/operations')
 @supervisor_required
 def supervisor_operations():
-    """Bütün istifadəçiləri idarə etmə səhifəsi."""
     log_action('VIEW_PAGE', 'Supervisor -> Əməliyyatlar (İstifadəçi İdarəetmə) səhifəsinə baxış', 'success')
     users = get_all_users()
     return render_template('supervisor_operations.html', users=users)
@@ -1835,7 +1810,6 @@ def supervisor_operations():
 @app.route('/supervisor/operations/add_user', methods=['POST'])
 @supervisor_required
 def supervisor_add_user():
-    """Supervisor yeni istifadəçi əlavə edir."""
     fullname = request.form['fullname'].strip()
     username = request.form['username'].strip()
     password = request.form['password']
@@ -1866,12 +1840,9 @@ def supervisor_add_user():
 @app.route('/supervisor/user/edit/<int:id>', methods=['GET', 'POST'])
 @supervisor_required
 def supervisor_edit_user(id):
-    """Supervisor istifadəçiləri (adminlər daxil) redaktə edir."""
     user = get_user_by_id(id)
     if not user:
         return redirect(url_for('supervisor_operations'))
-
-    # Supervisor özünü redaktə edə bilməz (təhlükəsizlik üçün)
     if user['username'] == session.get('user'):
         flash('Öz hesabınızı buradan redaktə edə bilməzsiniz.', 'danger')
         return redirect(url_for('supervisor_operations'))
