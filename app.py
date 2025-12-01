@@ -1133,9 +1133,8 @@ def delete_driver(id):
 
 @app.route('/admin/car/delete/<int:id>', methods=['POST'])
 @operator_required
-@app.route('/admin/car/delete/<int:id>', methods=['POST'])
-@operator_required
-def operator_delete_car(id):
+
+def delete_car(id):
     redirect_url = request.referrer or url_for('index')
     car = get_car_by_id(id)
     if not car:
