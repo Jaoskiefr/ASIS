@@ -9,6 +9,21 @@ import socket
 app = Flask(__name__)
 app.secret_key = 'ASIS_Sizin_Real_Gizli_Acariniz_Burada_Olsun' 
 
+# RAM-də saxlanan siyahılar (DB keçidindən əvvəlki struktur üçün)
+AUDIT_LOGS = []         
+EXPENSES = []            
+DELETED_EXPENSES = []  
+EXPENSE_TYPES = [      
+    'Yanacaq',
+    'Təmir',
+    'Yol xərci',
+    'Yuyulma',
+    'Sığorta',
+    'Cərimə',
+    'Digər'
+]
+
+
 def insert_expense(car_id, expense_type, amount, litr, description,
                    driver_id_at_expense, assistant_id_at_expense,
                    planner_id_at_expense, entered_by):
