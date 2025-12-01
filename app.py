@@ -53,7 +53,6 @@ def log_action(action, details, status='success'):
         hostname = ip
         
         try:
-            # 127.0.0.1 (localhost) üçün reverse lookup cəhd etməyə dəyməz
             if ip == '127.0.0.1' or ip.startswith('::1'):
                 hostname = 'localhost'
             else:
@@ -65,7 +64,7 @@ def log_action(action, details, status='success'):
             
             hostname = ip 
         finally:
-            socket.setdefaulttimeout(None) # Standard zaman aşımını bərpa et
+            socket.setdefaulttimeout(None) 
 
         log_entry = {
             "timestamp": datetime.now(),
