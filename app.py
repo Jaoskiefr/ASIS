@@ -5,9 +5,7 @@ from dateutil.relativedelta import relativedelta
 from functools import wraps
 import socket
 
-# ----------------------------------------------------
-# 1. FLASK TƏTBİQİNİN QURULMASI
-# ----------------------------------------------------
+
 app = Flask(__name__)
 app.secret_key = 'ASIS_Sizin_Real_Gizli_Acariniz_Burada_Olsun' 
 
@@ -58,29 +56,28 @@ def log_action(action, details, status='success'):
     """Audit loqu qeydə alır (YENİLƏNİB - Kompyuter adı ilə)."""
     try:
         ip = request.remote_addr if request else '127.0.0.1'
-        hostname = ip # Əgər adı tapılmazsa, IP-ni göstər
+        hostname = ip
         
         try:
             # 127.0.0.1 (localhost) üçün reverse lookup cəhd etməyə dəyməz
             if ip == '127.0.0.1' or ip.startswith('::1'):
                 hostname = 'localhost'
             else:
-                # IP-dən kompyuter adını (hostname) almağa cəhd et
-                # QEYD: Bu əməliyyat şəbəkə ayarlarından asılı olaraq bir neçə saniyə çəkə bilər
-                socket.setdefaulttimeout(0.5) # Gözləməni 0.5 saniyəyə azalt
+            
+                socket.setdefaulttimeout(0.5) 
                 hostname_info = socket.gethostbyaddr(ip)
-                hostname = hostname_info[0] # Nəticəni (kompyuter adını) götür
+                hostname = hostname_info[0] 
         except (socket.herror, socket.gaierror, socket.timeout):
-            # Əgər adı tapa bilməsə (məs. DNS-də yoxdursa), IP adresin özü qalsın
-            hostname = ip # Uğursuz olarsa, IP-ni qaytar
+            
+            hostname = ip 
         finally:
             socket.setdefaulttimeout(None) # Standard zaman aşımını bərpa et
 
         log_entry = {
             "timestamp": datetime.now(),
             "username": session.get('user', 'System'),
-            "ip": ip, # IP ünvanını hər ehtimala qarşı saxlayırıq
-            "hostname": hostname, # Kompyuter adını (və ya uğursuzdursa IP)
+            "ip": ip, 
+            "hostname": hostname, 
             "action": action,
             "details": details,
             "status": status
