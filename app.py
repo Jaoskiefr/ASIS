@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from db import get_connection
+from db import get_connection, check_and_update_tables
 from flask import Flask, render_template, request, redirect, url_for, session, flash, send_file
 from datetime import datetime, date, timedelta
 from dateutil.relativedelta import relativedelta
@@ -7,12 +7,15 @@ from functools import wraps
 import socket
 import json
 import io
-import re  # Regex modulunu əlavə etdik
+import re
 
 app = Flask(__name__)
 app.secret_key = 'ASIS_Sizin_Real_Gizli_Acariniz_Burada_Olsun' 
 
-# SABİT SİYAHILAR (Verilənlər bazasında olmayan statik məlumatlar)
+# Proqram işə düşəndə bazanı yoxla və is_deleted / is_active sütunlarını əlavə et
+check_and_update_tables()
+
+# --- SABİT SİYAHILAR ---
 EXPENSE_TYPES = [      
     'Yanacaq',
     'Təmir',
@@ -23,7 +26,6 @@ EXPENSE_TYPES = [
     'Digər'
 ]
 
-# Cərimə Növləri
 FINE_TYPES = [
     'Avtobus zolağı',
     'Sürət həddini aşma',
@@ -34,7 +36,6 @@ FINE_TYPES = [
     'Digər'
 ]
 
-# Təmir Növləri
 REPAIR_TYPES = [
     'Təkər təmiri / Yenisi',
     'Akumulyator',
@@ -49,12 +50,9 @@ REPAIR_TYPES = [
 def parse_expense_description(description):
     """
     Açıqlama mətnindən [Alt Növ] hissəsini ayırır.
-    Qaytarır: (alt_nov, temiz_aciqlama)
     """
     if not description:
         return "-", "-"
-    
-    # Regex: Sətrin əvvəlində [Hər hansı mətn] axtarır
     match = re.match(r'^\[(.*?)\]\s*(.*)', description, re.DOTALL)
     if match:
         subtype = match.group(1)
@@ -64,18 +62,14 @@ def parse_expense_description(description):
     else:
         return "-", description
 
-# --- VERİLƏNLƏR BAZASI KÖMƏKÇİ FUNKSİYALARI ---
+# --- VERİLƏNLƏR BAZASI GETTERS (Tək obyekt üçün) ---
 
 def get_car_by_id(car_id):
     if not car_id: return None
     conn = get_connection()
     try:
         with conn.cursor() as cursor:
-            cursor.execute("""
-                SELECT id, car_number, model, brand, model_name, category,
-                       driver_id, assistant_id, planner_id, notes
-                FROM cars WHERE id = %s
-            """, (car_id,))
+            cursor.execute("SELECT * FROM cars WHERE id = %s", (car_id,))
             return cursor.fetchone()
     finally:
         conn.close()
@@ -130,38 +124,57 @@ def get_user_by_id(user_id):
     finally:
         conn.close()
 
-def get_all_drivers():
+# --- GET ALL FUNCTIONS (STATUS FİLTRİ İLƏ) ---
+
+def get_all_drivers(only_active=False):
     conn = get_connection()
     try:
         with conn.cursor() as cursor:
-            cursor.execute("SELECT * FROM drivers ORDER BY name")
+            # Yalnız silinməmişlər (is_deleted=0)
+            sql = "SELECT * FROM drivers WHERE is_deleted = 0"
+            if only_active:
+                sql += " AND is_active = 1"
+            sql += " ORDER BY name"
+            cursor.execute(sql)
             return cursor.fetchall()
     finally:
         conn.close()
 
-def get_all_assistants():
+def get_all_assistants(only_active=False):
     conn = get_connection()
     try:
         with conn.cursor() as cursor:
-            cursor.execute("SELECT * FROM assistants ORDER BY name")
+            sql = "SELECT * FROM assistants WHERE is_deleted = 0"
+            if only_active:
+                sql += " AND is_active = 1"
+            sql += " ORDER BY name"
+            cursor.execute(sql)
             return cursor.fetchall()
     finally:
         conn.close()
 
-def get_all_planners():
+def get_all_planners(only_active=False):
     conn = get_connection()
     try:
         with conn.cursor() as cursor:
-            cursor.execute("SELECT * FROM planners ORDER BY name")
+            sql = "SELECT * FROM planners WHERE is_deleted = 0"
+            if only_active:
+                sql += " AND is_active = 1"
+            sql += " ORDER BY name"
+            cursor.execute(sql)
             return cursor.fetchall()
     finally:
         conn.close()
 
-def get_all_cars():
+def get_all_cars(only_active=False):
     conn = get_connection()
     try:
         with conn.cursor() as cursor:
-            cursor.execute("SELECT * FROM cars ORDER BY car_number")
+            sql = "SELECT * FROM cars WHERE (is_deleted = 0 OR is_deleted IS NULL)"
+            if only_active:
+                sql += " AND is_active = 1"
+            sql += " ORDER BY car_number"
+            cursor.execute(sql)
             return cursor.fetchall()
     finally:
         conn.close()
@@ -184,13 +197,13 @@ def get_all_users():
     finally:
         conn.close()
 
-# --- ƏSAS FUNKSİONALLIQ (LOG, XƏRC VƏ S.) ---
+# --- LOG & EXPENSE FUNCTIONALITY ---
 
 def log_action(action, details, status='success'):
     try:
         ip = request.remote_addr if request else '127.0.0.1'
         username = session.get('user', 'System')
-        hostname = ip
+        hostname = ip 
         try:
             if ip in ['127.0.0.1', '::1']:
                 hostname = 'localhost'
@@ -235,6 +248,7 @@ def get_dashboard_data():
     conn = get_connection()
     try:
         with conn.cursor() as cursor:
+            # Dashboard-da silinməmiş maşınları göstər
             cursor.execute("""
                 SELECT c.*, 
                        d.name as driver_name, 
@@ -244,6 +258,7 @@ def get_dashboard_data():
                 LEFT JOIN drivers d ON c.driver_id = d.id
                 LEFT JOIN assistants a ON c.assistant_id = a.id
                 LEFT JOIN planners p ON c.planner_id = p.id
+                WHERE (c.is_deleted = 0 OR c.is_deleted IS NULL)
                 ORDER BY c.car_number
             """)
             cars = cursor.fetchall()
@@ -283,7 +298,6 @@ def get_dashboard_data():
                     else:
                          e_dict['timestamp_str'] = "-"
                     
-                    # YENİ: Description-u parçala (Alt növ və təmiz açıqlama)
                     subtype, clean_desc = parse_expense_description(e_dict.get('description', ''))
                     e_dict['subtype'] = subtype
                     e_dict['clean_description'] = clean_desc
@@ -307,7 +321,8 @@ def get_dashboard_data():
                     "driver_id": car['driver_id'],
                     "assistant_id": car['assistant_id'],
                     "planner_id": car['planner_id'],
-                    "has_expenses": total_expense > 0
+                    "has_expenses": total_expense > 0,
+                    "is_active": car.get('is_active', 1)
                 }
                 full_data.append(car_data)
             
@@ -351,14 +366,13 @@ def calculate_experience(start_date_input):
         print(f"Experience calc error: {e}")
         return "Xəta"
 
-# --- JSON SERİALIZER HELPER ---
 class DateTimeEncoder(json.JSONEncoder):
     def default(self, o):
         if isinstance(o, (date, datetime)):
             return o.isoformat()
         return super().default(o)
 
-# --- DEKORATORLAR ---
+# --- AUTH DECORATORS ---
 
 def login_required(f):
     @wraps(f)
@@ -394,7 +408,7 @@ def operator_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
-# --- ROUTE-LAR ---
+# --- ROUTES ---
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -442,13 +456,15 @@ def index():
             with conn.cursor() as cursor:
                 cursor.execute("SELECT COUNT(*) as c FROM users WHERE role='user'")
                 op_count = cursor.fetchone()['c']
-                cursor.execute("SELECT COUNT(*) as c FROM cars")
+                
+                # Sayları yalnız silinməmiş (is_deleted=0) qeydlərdən alırıq
+                cursor.execute("SELECT COUNT(*) as c FROM cars WHERE is_deleted=0")
                 car_count = cursor.fetchone()['c']
-                cursor.execute("SELECT COUNT(*) as c FROM drivers")
+                cursor.execute("SELECT COUNT(*) as c FROM drivers WHERE is_deleted=0")
                 dr_count = cursor.fetchone()['c']
-                cursor.execute("SELECT COUNT(*) as c FROM assistants")
+                cursor.execute("SELECT COUNT(*) as c FROM assistants WHERE is_deleted=0")
                 as_count = cursor.fetchone()['c']
-                cursor.execute("SELECT COUNT(*) as c FROM planners")
+                cursor.execute("SELECT COUNT(*) as c FROM planners WHERE is_deleted=0")
                 pl_count = cursor.fetchone()['c']
                 
                 now = datetime.now()
@@ -481,17 +497,10 @@ def index():
     # Operator Dashboard
     dashboard_data = get_dashboard_data()
     
-    conn = get_connection()
-    try:
-        with conn.cursor() as cursor:
-            cursor.execute("SELECT * FROM drivers ORDER BY name")
-            drivers = cursor.fetchall()
-            cursor.execute("SELECT * FROM assistants ORDER BY name")
-            assistants = cursor.fetchall()
-            cursor.execute("SELECT * FROM planners ORDER BY name")
-            planners = cursor.fetchall()
-    finally:
-        conn.close()
+    # Operatorlar dropdown-larda yalnız AKTİV işçiləri görməlidir
+    drivers = get_all_drivers(only_active=True)
+    assistants = get_all_assistants(only_active=True)
+    planners = get_all_planners(only_active=True)
 
     return render_template('operator_dashboard.html', 
         cars=dashboard_data, drivers=drivers, assistants=assistants, planners=planners,
@@ -572,7 +581,7 @@ def update_car_meta():
     flash('Məlumatlar yeniləndi.', 'success')
     return redirect(url_for('index'))
 
-# --- ADMIN ROUTES ---
+# --- DRIVER ROUTES (ADMIN) ---
 
 @app.route('/admin/drivers')
 @operator_required
@@ -580,7 +589,8 @@ def admin_drivers():
     conn = get_connection()
     try:
         with conn.cursor() as cursor:
-            cursor.execute("SELECT * FROM drivers ORDER BY name")
+            # Admin bütün sürücüləri (Aktiv və Passiv) görməlidir, amma silinmişləri yox
+            cursor.execute("SELECT * FROM drivers WHERE is_deleted=0 ORDER BY name")
             drivers = cursor.fetchall()
             for d in drivers:
                 driver_id = int(d['id'])
@@ -603,7 +613,8 @@ def add_driver():
     conn = get_connection()
     try:
         with conn.cursor() as cursor:
-            cursor.execute("INSERT INTO drivers (name, license_no, phone, start_date) VALUES (%s, %s, %s, %s)",
+            # Default olaraq is_active=1 (Aktiv), is_deleted=0
+            cursor.execute("INSERT INTO drivers (name, license_no, phone, start_date, is_active, is_deleted) VALUES (%s, %s, %s, %s, 1, 0)",
                            (name, request.form.get('license_no'), request.form.get('phone'), start_date))
         conn.commit()
     finally:
@@ -630,22 +641,35 @@ def edit_driver(id):
     driver = get_driver_by_id(id)
     return render_template('edit_driver.html', driver=driver)
 
+@app.route('/admin/driver/toggle_status/<int:id>', methods=['POST'])
+@operator_required
+def toggle_driver_status(id):
+    conn = get_connection()
+    try:
+        with conn.cursor() as cursor:
+            # Statusu tərsinə çevir (1 -> 0, 0 -> 1)
+            cursor.execute("UPDATE drivers SET is_active = NOT is_active WHERE id=%s", (id,))
+        conn.commit()
+        flash('Sürücü statusu dəyişdirildi.', 'success')
+    finally:
+        conn.close()
+    return redirect(url_for('admin_drivers'))
+
 @app.route('/admin/driver/delete/<int:id>', methods=['POST'])
 @operator_required
 def delete_driver(id):
     conn = get_connection()
     try:
         with conn.cursor() as cursor:
-            cursor.execute("SELECT id FROM expenses WHERE driver_id_at_expense=%s AND is_deleted=0 LIMIT 1", (id,))
-            if cursor.fetchone():
-                flash('Xərcləri olan sürücünü silmək olmaz.', 'danger')
-                return redirect(url_for('admin_drivers'))
+            # 1. Maşınlardan çıxar (NULL et)
             cursor.execute("UPDATE cars SET driver_id=NULL WHERE driver_id=%s", (id,))
-            cursor.execute("DELETE FROM drivers WHERE id=%s", (id,))
+            
+            # 2. Yumşaq silmə (Soft Delete) - adını dəyiş və gizlət
+            cursor.execute("UPDATE drivers SET is_deleted=1, name=CONCAT(name, ' (silinmiş)') WHERE id=%s", (id,))
         conn.commit()
     finally:
         conn.close()
-    flash('Sürücü silindi.', 'success')
+    flash('Sürücü silindi (Arxivləndi).', 'success')
     return redirect(url_for('admin_drivers'))
 
 @app.route('/admin/drivers/bulk_add', methods=['POST'])
@@ -672,8 +696,8 @@ def bulk_add_driver():
                     except ValueError: start_date = None
 
                 cursor.execute("""
-                    INSERT INTO drivers (name, license_no, phone, start_date) 
-                    VALUES (%s, %s, %s, %s)
+                    INSERT INTO drivers (name, license_no, phone, start_date, is_active, is_deleted) 
+                    VALUES (%s, %s, %s, %s, 1, 0)
                 """, (name, license_no, phone, start_date))
                 if license_no: existing_licenses.add(license_no)
                 added_count += 1
@@ -683,7 +707,402 @@ def bulk_add_driver():
     flash(f"{added_count} sürücü əlavə edildi.", 'success')
     return redirect(url_for('admin_drivers'))
 
-# --- ADMIN REPORTS ---
+# --- CAR ROUTES (ADMIN) ---
+
+@app.route('/admin/cars')
+@operator_required
+def admin_cars():
+    # Dropdown üçün yalnız AKTİV işçilər
+    drivers = get_all_drivers(only_active=True)
+    assistants = get_all_assistants(only_active=True)
+    planners = get_all_planners(only_active=True)
+    
+    # Siyahı üçün bütün maşınlar (silinməmişlər)
+    cars = get_all_cars(only_active=False)
+    
+    conn = get_connection()
+    try:
+        with conn.cursor() as cursor:
+            for c in cars:
+                cursor.execute("SELECT id FROM expenses WHERE car_id=%s AND is_deleted=0 LIMIT 1", (c['id'],))
+                c['has_expenses'] = cursor.fetchone() is not None
+    finally:
+        conn.close()
+    return render_template('admin_cars.html', cars=cars, drivers=drivers, assistants=assistants, planners=planners)
+
+@app.route('/admin/cars/add', methods=['POST'])
+@operator_required
+def add_car():
+    try:
+        conn = get_connection()
+        with conn.cursor() as cursor:
+            cursor.execute("INSERT INTO cars (car_number, model, driver_id, assistant_id, planner_id, is_active, is_deleted) VALUES (%s, %s, %s, %s, %s, 1, 0)",
+                           (request.form['car_number'], request.form['model'], 
+                            request.form.get('driver_id') or None, request.form.get('assistant_id') or None, request.form.get('planner_id') or None))
+        conn.commit()
+        conn.close()
+        flash('Avtomobil əlavə edildi.', 'success')
+    except Exception as e:
+        flash(f'Xəta: {e}', 'danger')
+    return redirect(url_for('admin_cars'))
+
+@app.route('/admin/car/toggle_status/<int:id>', methods=['POST'])
+@operator_required
+def toggle_car_status(id):
+    conn = get_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("UPDATE cars SET is_active = NOT is_active WHERE id=%s", (id,))
+        conn.commit()
+        flash('Avtomobil statusu dəyişdirildi.', 'success')
+    finally:
+        conn.close()
+    return redirect(url_for('admin_cars'))
+
+@app.route('/admin/car/edit/<int:id>', methods=['GET', 'POST'])
+@operator_required
+def edit_car(id):
+    if request.method == 'POST':
+        conn = get_connection()
+        def get_val_or_none(field):
+            val = request.form.get(field)
+            return int(val) if val and val.isdigit() else None
+
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                UPDATE cars SET car_number=%s, model=%s, driver_id=%s, assistant_id=%s, planner_id=%s 
+                WHERE id=%s
+            """, (
+                request.form['car_number'], 
+                request.form['model'], 
+                get_val_or_none('driver_id'),
+                get_val_or_none('assistant_id'),
+                get_val_or_none('planner_id'),
+                id
+            ))
+        conn.commit()
+        conn.close()
+        return redirect(url_for('admin_cars'))
+    
+    car = get_car_by_id(id)
+    # Redaktə zamanı da yalnız AKTİV işçilər təklif olunur
+    all_drivers = get_all_drivers(only_active=True)
+    all_assistants = get_all_assistants(only_active=True)
+    all_planners = get_all_planners(only_active=True)
+    
+    # Məşğulluq yoxlaması (logic saxlanılır)
+    all_cars_list = get_all_cars(only_active=False)
+    occupied_driver_ids = set()
+    occupied_assistant_ids = set()
+    
+    for c in all_cars_list:
+        if c['id'] != id:
+            if c['driver_id']: occupied_driver_ids.add(c['driver_id'])
+            if c['assistant_id']: occupied_assistant_ids.add(c['assistant_id'])
+    
+    available_drivers = [d for d in all_drivers if d['id'] not in occupied_driver_ids]
+    available_assistants = [a for a in all_assistants if a['id'] not in occupied_assistant_ids]
+    
+    return render_template('edit_car.html', 
+                           car=car, 
+                           drivers=available_drivers, 
+                           assistants=available_assistants, 
+                           planners=all_planners)
+
+@app.route('/admin/car/delete/<int:id>', methods=['POST'])
+@operator_required
+def delete_car(id):
+    conn = get_connection()
+    try:
+        with conn.cursor() as cursor:
+            # Yumşaq silmə
+            cursor.execute("UPDATE cars SET is_deleted=1 WHERE id=%s", (id,))
+            conn.commit()
+            flash('Silindi.', 'success')
+    finally:
+        conn.close()
+    return redirect(url_for('admin_cars'))
+
+@app.route('/admin/cars/bulk_add', methods=['POST'])
+@operator_required
+def bulk_add_car():
+    bulk_data = request.form.get('bulk_data', '')
+    conn = get_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT car_number FROM cars")
+            existing = {row['car_number'] for row in cursor.fetchall()}
+            for line in bulk_data.splitlines():
+                parts = line.split(';')
+                if len(parts) >= 2:
+                    num = parts[0].strip()
+                    model = parts[1].strip()
+                    if num and num not in existing:
+                        cursor.execute("INSERT INTO cars (car_number, model, is_active, is_deleted) VALUES (%s, %s, 1, 0)", (num, model))
+                        existing.add(num)
+        conn.commit()
+    finally:
+        conn.close()
+    flash('Toplu əlavə edildi.', 'success')
+    return redirect(url_for('admin_cars'))
+
+# --- ASSISTANT ROUTES (ADMIN) ---
+
+@app.route('/admin/assistants')
+@operator_required
+def admin_assistants():
+    conn = get_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT * FROM assistants WHERE is_deleted=0 ORDER BY name")
+            assistants = cursor.fetchall()
+            for a in assistants:
+                cursor.execute("SELECT id FROM expenses WHERE assistant_id_at_expense=%s AND is_deleted=0 LIMIT 1", (a['id'],))
+                a['has_expenses'] = cursor.fetchone() is not None
+    finally:
+        conn.close()
+    return render_template('admin_assistants.html', assistants=assistants)
+
+@app.route('/admin/assistants/add', methods=['POST'])
+@operator_required
+def add_assistant():
+    conn = get_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("INSERT INTO assistants (name, is_active, is_deleted) VALUES (%s, 1, 0)", (request.form['name'],))
+        conn.commit()
+    finally:
+        conn.close()
+    return redirect(url_for('admin_assistants'))
+
+@app.route('/admin/assistant/edit/<int:aid>', methods=['GET', 'POST'])
+@operator_required
+def edit_assistant(aid):
+    if request.method == 'POST':
+        conn = get_connection()
+        with conn.cursor() as cursor:
+            cursor.execute("UPDATE assistants SET name=%s WHERE id=%s", (request.form['name'], aid))
+        conn.commit()
+        conn.close()
+        return redirect(url_for('admin_assistants'))
+    assistant = get_assistant_by_id(aid)
+    return render_template('edit_assistant.html', assistant=assistant)
+
+@app.route('/admin/assistant/toggle_status/<int:id>', methods=['POST'])
+@operator_required
+def toggle_assistant_status(id):
+    conn = get_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("UPDATE assistants SET is_active = NOT is_active WHERE id=%s", (id,))
+        conn.commit()
+    finally:
+        conn.close()
+    return redirect(url_for('admin_assistants'))
+
+@app.route('/admin/assistant/delete/<int:aid>', methods=['POST'])
+@operator_required
+def delete_assistant(aid):
+    conn = get_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("UPDATE cars SET assistant_id=NULL WHERE assistant_id=%s", (aid,))
+            cursor.execute("UPDATE assistants SET is_deleted=1, name=CONCAT(name, ' (silinmiş)') WHERE id=%s", (aid,))
+        conn.commit()
+    finally:
+        conn.close()
+    return redirect(url_for('admin_assistants'))
+
+@app.route('/admin/assistants/bulk_add', methods=['POST'])
+@operator_required
+def bulk_add_assistant():
+    bulk_data = request.form.get('bulk_data', '')
+    conn = get_connection()
+    try:
+        with conn.cursor() as cursor:
+            for line in bulk_data.splitlines():
+                if line.strip(): 
+                    cursor.execute("INSERT INTO assistants (name, is_active, is_deleted) VALUES (%s, 1, 0)", (line.strip(),))
+        conn.commit()
+    finally:
+        conn.close()
+    return redirect(url_for('admin_assistants'))
+
+# --- PLANNER ROUTES (ADMIN) ---
+
+@app.route('/admin/planners')
+@operator_required
+def admin_planners():
+    conn = get_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT * FROM planners WHERE is_deleted=0 ORDER BY name")
+            planners = cursor.fetchall()
+            for p in planners:
+                cursor.execute("SELECT id FROM expenses WHERE planner_id_at_expense=%s AND is_deleted=0 LIMIT 1", (p['id'],))
+                p['has_expenses'] = cursor.fetchone() is not None
+    finally:
+        conn.close()
+    return render_template('admin_planners.html', planners=planners)
+
+@app.route('/admin/planners/add', methods=['POST'])
+@operator_required
+def add_planner():
+    conn = get_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("INSERT INTO planners (name, is_active, is_deleted) VALUES (%s, 1, 0)", (request.form['name'],))
+        conn.commit()
+    finally:
+        conn.close()
+    return redirect(url_for('admin_planners'))
+
+@app.route('/admin/planner/edit/<int:pid>', methods=['GET', 'POST'])
+@operator_required
+def edit_planner(pid):
+    if request.method == 'POST':
+        conn = get_connection()
+        with conn.cursor() as cursor:
+            cursor.execute("UPDATE planners SET name=%s WHERE id=%s", (request.form['name'], pid))
+        conn.commit()
+        conn.close()
+        return redirect(url_for('admin_planners'))
+    planner = get_planner_by_id(pid)
+    return render_template('edit_planner.html', planner=planner)
+
+@app.route('/admin/planner/toggle_status/<int:id>', methods=['POST'])
+@operator_required
+def toggle_planner_status(id):
+    conn = get_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("UPDATE planners SET is_active = NOT is_active WHERE id=%s", (id,))
+        conn.commit()
+    finally:
+        conn.close()
+    return redirect(url_for('admin_planners'))
+
+@app.route('/admin/planner/delete/<int:pid>', methods=['POST'])
+@operator_required
+def delete_planner(pid):
+    conn = get_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("UPDATE cars SET planner_id=NULL WHERE planner_id=%s", (pid,))
+            cursor.execute("UPDATE planners SET is_deleted=1, name=CONCAT(name, ' (silinmiş)') WHERE id=%s", (pid,))
+        conn.commit()
+    finally:
+        conn.close()
+    return redirect(url_for('admin_planners'))
+
+@app.route('/admin/planners/bulk_add', methods=['POST'])
+@operator_required
+def bulk_add_planner():
+    bulk_data = request.form.get('bulk_data', '')
+    conn = get_connection()
+    try:
+        with conn.cursor() as cursor:
+            for line in bulk_data.splitlines():
+                if line.strip(): 
+                    cursor.execute("INSERT INTO planners (name, is_active, is_deleted) VALUES (%s, 1, 0)", (line.strip(),))
+        conn.commit()
+    finally:
+        conn.close()
+    return redirect(url_for('admin_planners'))
+
+# --- USER ROUTES (ADMIN) ---
+
+@app.route('/admin/users')
+@admin_required
+def admin_users():
+    users = get_operators()
+    return render_template('admin_users.html', users=users)
+
+@app.route('/admin/users/add', methods=['POST'])
+@admin_required
+def add_user():
+    conn = get_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("INSERT INTO users (fullname, username, password, role) VALUES (%s, %s, %s, %s)",
+                           (request.form['fullname'], request.form['username'], request.form['password'], request.form['role']))
+        conn.commit()
+    finally:
+        conn.close()
+    return redirect(url_for('admin_users'))
+
+@app.route('/admin/user/edit/<int:id>', methods=['GET', 'POST'])
+@admin_required
+def edit_user(id):
+    if request.method == 'POST':
+        conn = get_connection()
+        with conn.cursor() as cursor:
+            sql = "UPDATE users SET fullname=%s, username=%s, role=%s"
+            params = [request.form['fullname'], request.form['username'], request.form['role']]
+            if request.form['password']:
+                sql += ", password=%s"
+                params.append(request.form['password'])
+            sql += " WHERE id=%s"
+            params.append(id)
+            cursor.execute(sql, tuple(params))
+        conn.commit()
+        conn.close()
+        return redirect(url_for('admin_users'))
+    user = get_user_by_id(id)
+    return render_template('edit_user.html', user=user)
+
+@app.route('/admin/user/delete/<int:id>', methods=['POST'])
+@admin_required
+def delete_user(id):
+    conn = get_connection()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("DELETE FROM users WHERE id=%s", (id,))
+        conn.commit()
+    finally:
+        conn.close()
+    return redirect(url_for('admin_users'))
+
+# --- SUPERVISOR ROUTES ---
+
+@app.route('/supervisor/operations')
+@supervisor_required
+def supervisor_operations():
+    users = get_all_users()
+    return render_template('supervisor_operations.html', users=users)
+
+@app.route('/supervisor/operations/add_user', methods=['POST'])
+@supervisor_required
+def supervisor_add_user():
+    return add_user() 
+
+@app.route('/supervisor/user/edit/<int:id>', methods=['GET', 'POST'])
+@supervisor_required
+def supervisor_edit_user(id):
+    if request.method == 'POST':
+        is_active = 1 if request.form.get('is_active') == 'on' else 0
+        conn = get_connection()
+        with conn.cursor() as cursor:
+            sql = "UPDATE users SET fullname=%s, username=%s, role=%s, is_active=%s"
+            params = [request.form['fullname'], request.form['username'], request.form['role'], is_active]
+            if request.form['password']:
+                sql += ", password=%s"
+                params.append(request.form['password'])
+            sql += " WHERE id=%s"
+            params.append(id)
+            cursor.execute(sql, tuple(params))
+        conn.commit()
+        conn.close()
+        return redirect(url_for('supervisor_operations'))
+    user = get_user_by_id(id)
+    return render_template('supervisor_edit_user.html', user=user)
+
+@app.route('/supervisor/user/delete/<int:id>', methods=['POST'])
+@supervisor_required
+def supervisor_delete_user(id):
+    return delete_user(id)
+
+# --- REPORTS ROUTES ---
 
 @app.route('/admin/reports')
 def admin_reports():
@@ -753,7 +1172,6 @@ def admin_reports():
                 expense_obj = r
                 expense_obj['timestamp'] = r['created_at']
                 
-                # YENİ: Admin panelində də açıqlamanı parse edirik
                 subtype, clean_desc = parse_expense_description(r.get('description', ''))
                 expense_obj['subtype'] = subtype
                 expense_obj['clean_description'] = clean_desc
@@ -770,13 +1188,13 @@ def admin_reports():
                     'planner_name_at_expense': r['planner_name_at_expense'] or "-"
                 })
             
-            cursor.execute("SELECT * FROM cars")
+            cursor.execute("SELECT * FROM cars ORDER BY car_number")
             cars = cursor.fetchall()
-            cursor.execute("SELECT * FROM drivers")
+            cursor.execute("SELECT * FROM drivers WHERE is_deleted=0 ORDER BY name")
             drivers = cursor.fetchall()
-            cursor.execute("SELECT * FROM assistants")
+            cursor.execute("SELECT * FROM assistants WHERE is_deleted=0 ORDER BY name")
             assistants = cursor.fetchall()
-            cursor.execute("SELECT * FROM planners")
+            cursor.execute("SELECT * FROM planners WHERE is_deleted=0 ORDER BY name")
             planners = cursor.fetchall()
             cursor.execute("SELECT * FROM users WHERE role='user'")
             operators = cursor.fetchall()
@@ -862,8 +1280,6 @@ def restore_expense(id):
         conn.close()
     flash('Xərc bərpa edildi.', 'success')
     return redirect(url_for('admin_deleted_reports'))
-
-# --- SUPERVISOR SECTION ---
 
 @app.route('/supervisor/dashboard')
 @supervisor_required
@@ -997,359 +1413,6 @@ def import_db():
         flash(f"Fayl xətası: {str(e)}", 'danger')
     
     return redirect(url_for('supervisor_data'))
-
-# --- DIGƏR ADMIN FUNKSIYALARI ---
-
-@app.route('/admin/cars')
-@operator_required
-def admin_cars():
-    conn = get_connection()
-    try:
-        with conn.cursor() as cursor:
-            cursor.execute("SELECT * FROM cars")
-            cars = cursor.fetchall()
-            drivers = get_all_drivers()
-            assistants = get_all_assistants()
-            planners = get_all_planners()
-            for c in cars:
-                cursor.execute("SELECT id FROM expenses WHERE car_id=%s AND is_deleted=0 LIMIT 1", (c['id'],))
-                c['has_expenses'] = cursor.fetchone() is not None
-    finally:
-        conn.close()
-    return render_template('admin_cars.html', cars=cars, drivers=drivers, assistants=assistants, planners=planners)
-
-@app.route('/admin/cars/add', methods=['POST'])
-@operator_required
-def add_car():
-    try:
-        conn = get_connection()
-        with conn.cursor() as cursor:
-            cursor.execute("INSERT INTO cars (car_number, model, driver_id, assistant_id, planner_id) VALUES (%s, %s, %s, %s, %s)",
-                           (request.form['car_number'], request.form['model'], 
-                            request.form.get('driver_id') or None, request.form.get('assistant_id') or None, request.form.get('planner_id') or None))
-        conn.commit()
-        conn.close()
-        flash('Avtomobil əlavə edildi.', 'success')
-    except Exception as e:
-        flash(f'Xəta: {e}', 'danger')
-    return redirect(url_for('admin_cars'))
-
-@app.route('/admin/car/edit/<int:id>', methods=['GET', 'POST'])
-@operator_required
-def edit_car(id):
-    if request.method == 'POST':
-        conn = get_connection()
-        # Helper to handle empty strings as None
-        def get_val_or_none(field):
-            val = request.form.get(field)
-            return int(val) if val and val.isdigit() else None
-
-        with conn.cursor() as cursor:
-            cursor.execute("""
-                UPDATE cars SET car_number=%s, model=%s, driver_id=%s, assistant_id=%s, planner_id=%s 
-                WHERE id=%s
-            """, (
-                request.form['car_number'], 
-                request.form['model'], 
-                get_val_or_none('driver_id'),
-                get_val_or_none('assistant_id'),
-                get_val_or_none('planner_id'),
-                id
-            ))
-        conn.commit()
-        conn.close()
-        return redirect(url_for('admin_cars'))
-    
-    car = get_car_by_id(id)
-    
-    # 1. Dublikat yoxlanışı üçün bütün maşınları çəkirik
-    all_cars = get_all_cars()
-    
-    # 2. Məşğul olan Sürücü və Köməkçiləri tapırıq (Cari maşını istisna etməklə)
-    occupied_driver_ids = set()
-    occupied_assistant_ids = set()
-    
-    for c in all_cars:
-        if c['id'] != id: # Cari redaktə olunan maşın deyil
-            if c['driver_id']: occupied_driver_ids.add(c['driver_id'])
-            if c['assistant_id']: occupied_assistant_ids.add(c['assistant_id'])
-    
-    # 3. Bütün personalı bazadan çəkirik
-    all_drivers = get_all_drivers()
-    all_assistants = get_all_assistants()
-    all_planners = get_all_planners() # Planlamaçılar çox maşına baxa bilər, filtrləmirik
-    
-    # 4. Yalnız boş olanları (və ya bu maşına təyin olunanları) siyahıda saxlayırıq
-    available_drivers = [d for d in all_drivers if d['id'] not in occupied_driver_ids]
-    available_assistants = [a for a in all_assistants if a['id'] not in occupied_assistant_ids]
-    
-    return render_template('edit_car.html', 
-                           car=car, 
-                           drivers=available_drivers, 
-                           assistants=available_assistants, 
-                           planners=all_planners)
-
-@app.route('/admin/car/delete/<int:id>', methods=['POST'])
-@operator_required
-def delete_car(id):
-    conn = get_connection()
-    try:
-        with conn.cursor() as cursor:
-            cursor.execute("SELECT id FROM expenses WHERE car_id=%s AND is_deleted=0 LIMIT 1", (id,))
-            if cursor.fetchone():
-                flash('Xərci olan avtomobil silinə bilməz.', 'danger')
-            else:
-                cursor.execute("DELETE FROM cars WHERE id=%s", (id,))
-                conn.commit()
-                flash('Silindi.', 'success')
-    finally:
-        conn.close()
-    return redirect(url_for('admin_cars'))
-
-@app.route('/admin/cars/bulk_add', methods=['POST'])
-@operator_required
-def bulk_add_car():
-    bulk_data = request.form.get('bulk_data', '')
-    conn = get_connection()
-    try:
-        with conn.cursor() as cursor:
-            cursor.execute("SELECT car_number FROM cars")
-            existing = {row['car_number'] for row in cursor.fetchall()}
-            for line in bulk_data.splitlines():
-                parts = line.split(';')
-                if len(parts) >= 2:
-                    num = parts[0].strip()
-                    model = parts[1].strip()
-                    if num and num not in existing:
-                        cursor.execute("INSERT INTO cars (car_number, model) VALUES (%s, %s)", (num, model))
-                        existing.add(num)
-        conn.commit()
-    finally:
-        conn.close()
-    flash('Toplu əlavə edildi.', 'success')
-    return redirect(url_for('admin_cars'))
-
-@app.route('/admin/assistants')
-@operator_required
-def admin_assistants():
-    conn = get_connection()
-    try:
-        with conn.cursor() as cursor:
-            cursor.execute("SELECT * FROM assistants ORDER BY name")
-            assistants = cursor.fetchall()
-            for a in assistants:
-                cursor.execute("SELECT id FROM expenses WHERE assistant_id_at_expense=%s AND is_deleted=0 LIMIT 1", (a['id'],))
-                a['has_expenses'] = cursor.fetchone() is not None
-    finally:
-        conn.close()
-    return render_template('admin_assistants.html', assistants=assistants)
-
-@app.route('/admin/assistants/add', methods=['POST'])
-@operator_required
-def add_assistant():
-    conn = get_connection()
-    try:
-        with conn.cursor() as cursor:
-            cursor.execute("INSERT INTO assistants (name) VALUES (%s)", (request.form['name'],))
-        conn.commit()
-    finally:
-        conn.close()
-    return redirect(url_for('admin_assistants'))
-
-@app.route('/admin/assistant/edit/<int:aid>', methods=['GET', 'POST'])
-@operator_required
-def edit_assistant(aid):
-    if request.method == 'POST':
-        conn = get_connection()
-        with conn.cursor() as cursor:
-            cursor.execute("UPDATE assistants SET name=%s WHERE id=%s", (request.form['name'], aid))
-        conn.commit()
-        conn.close()
-        return redirect(url_for('admin_assistants'))
-    assistant = get_assistant_by_id(aid)
-    return render_template('edit_assistant.html', assistant=assistant)
-
-@app.route('/admin/assistant/delete/<int:aid>', methods=['POST'])
-@operator_required
-def delete_assistant(aid):
-    conn = get_connection()
-    try:
-        with conn.cursor() as cursor:
-            cursor.execute("UPDATE cars SET assistant_id=NULL WHERE assistant_id=%s", (aid,))
-            cursor.execute("DELETE FROM assistants WHERE id=%s", (aid,))
-        conn.commit()
-    finally:
-        conn.close()
-    return redirect(url_for('admin_assistants'))
-
-@app.route('/admin/assistants/bulk_add', methods=['POST'])
-@operator_required
-def bulk_add_assistant():
-    bulk_data = request.form.get('bulk_data', '')
-    conn = get_connection()
-    try:
-        with conn.cursor() as cursor:
-            for line in bulk_data.splitlines():
-                if line.strip(): cursor.execute("INSERT INTO assistants (name) VALUES (%s)", (line.strip(),))
-        conn.commit()
-    finally:
-        conn.close()
-    return redirect(url_for('admin_assistants'))
-
-@app.route('/admin/planners')
-@operator_required
-def admin_planners():
-    conn = get_connection()
-    try:
-        with conn.cursor() as cursor:
-            cursor.execute("SELECT * FROM planners ORDER BY name")
-            planners = cursor.fetchall()
-            for p in planners:
-                cursor.execute("SELECT id FROM expenses WHERE planner_id_at_expense=%s AND is_deleted=0 LIMIT 1", (p['id'],))
-                p['has_expenses'] = cursor.fetchone() is not None
-    finally:
-        conn.close()
-    return render_template('admin_planners.html', planners=planners)
-
-@app.route('/admin/planners/add', methods=['POST'])
-@operator_required
-def add_planner():
-    conn = get_connection()
-    try:
-        with conn.cursor() as cursor:
-            cursor.execute("INSERT INTO planners (name) VALUES (%s)", (request.form['name'],))
-        conn.commit()
-    finally:
-        conn.close()
-    return redirect(url_for('admin_planners'))
-
-@app.route('/admin/planner/edit/<int:pid>', methods=['GET', 'POST'])
-@operator_required
-def edit_planner(pid):
-    if request.method == 'POST':
-        conn = get_connection()
-        with conn.cursor() as cursor:
-            cursor.execute("UPDATE planners SET name=%s WHERE id=%s", (request.form['name'], pid))
-        conn.commit()
-        conn.close()
-        return redirect(url_for('admin_planners'))
-    planner = get_planner_by_id(pid)
-    return render_template('edit_planner.html', planner=planner)
-
-@app.route('/admin/planner/delete/<int:pid>', methods=['POST'])
-@operator_required
-def delete_planner(pid):
-    conn = get_connection()
-    try:
-        with conn.cursor() as cursor:
-            cursor.execute("UPDATE cars SET planner_id=NULL WHERE planner_id=%s", (pid,))
-            cursor.execute("DELETE FROM planners WHERE id=%s", (pid,))
-        conn.commit()
-    finally:
-        conn.close()
-    return redirect(url_for('admin_planners'))
-
-@app.route('/admin/planners/bulk_add', methods=['POST'])
-@operator_required
-def bulk_add_planner():
-    bulk_data = request.form.get('bulk_data', '')
-    conn = get_connection()
-    try:
-        with conn.cursor() as cursor:
-            for line in bulk_data.splitlines():
-                if line.strip(): cursor.execute("INSERT INTO planners (name) VALUES (%s)", (line.strip(),))
-        conn.commit()
-    finally:
-        conn.close()
-    return redirect(url_for('admin_planners'))
-
-@app.route('/admin/users')
-@admin_required
-def admin_users():
-    users = get_operators()
-    return render_template('admin_users.html', users=users)
-
-@app.route('/admin/users/add', methods=['POST'])
-@admin_required
-def add_user():
-    conn = get_connection()
-    try:
-        with conn.cursor() as cursor:
-            cursor.execute("INSERT INTO users (fullname, username, password, role) VALUES (%s, %s, %s, %s)",
-                           (request.form['fullname'], request.form['username'], request.form['password'], request.form['role']))
-        conn.commit()
-    finally:
-        conn.close()
-    return redirect(url_for('admin_users'))
-
-@app.route('/admin/user/edit/<int:id>', methods=['GET', 'POST'])
-@admin_required
-def edit_user(id):
-    if request.method == 'POST':
-        conn = get_connection()
-        with conn.cursor() as cursor:
-            sql = "UPDATE users SET fullname=%s, username=%s, role=%s"
-            params = [request.form['fullname'], request.form['username'], request.form['role']]
-            if request.form['password']:
-                sql += ", password=%s"
-                params.append(request.form['password'])
-            sql += " WHERE id=%s"
-            params.append(id)
-            cursor.execute(sql, tuple(params))
-        conn.commit()
-        conn.close()
-        return redirect(url_for('admin_users'))
-    user = get_user_by_id(id)
-    return render_template('edit_user.html', user=user)
-
-@app.route('/admin/user/delete/<int:id>', methods=['POST'])
-@admin_required
-def delete_user(id):
-    conn = get_connection()
-    try:
-        with conn.cursor() as cursor:
-            cursor.execute("DELETE FROM users WHERE id=%s", (id,))
-        conn.commit()
-    finally:
-        conn.close()
-    return redirect(url_for('admin_users'))
-
-@app.route('/supervisor/operations')
-@supervisor_required
-def supervisor_operations():
-    users = get_all_users()
-    return render_template('supervisor_operations.html', users=users)
-
-@app.route('/supervisor/operations/add_user', methods=['POST'])
-@supervisor_required
-def supervisor_add_user():
-    return add_user() 
-
-@app.route('/supervisor/user/edit/<int:id>', methods=['GET', 'POST'])
-@supervisor_required
-def supervisor_edit_user(id):
-    if request.method == 'POST':
-        is_active = 1 if request.form.get('is_active') == 'on' else 0
-        conn = get_connection()
-        with conn.cursor() as cursor:
-            sql = "UPDATE users SET fullname=%s, username=%s, role=%s, is_active=%s"
-            params = [request.form['fullname'], request.form['username'], request.form['role'], is_active]
-            if request.form['password']:
-                sql += ", password=%s"
-                params.append(request.form['password'])
-            sql += " WHERE id=%s"
-            params.append(id)
-            cursor.execute(sql, tuple(params))
-        conn.commit()
-        conn.close()
-        return redirect(url_for('supervisor_operations'))
-    user = get_user_by_id(id)
-    return render_template('supervisor_edit_user.html', user=user)
-
-@app.route('/supervisor/user/delete/<int:id>', methods=['POST'])
-@supervisor_required
-def supervisor_delete_user(id):
-    return delete_user(id)
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
