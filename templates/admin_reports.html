@@ -18,7 +18,11 @@
     </style>
 </head>
 <body>
-    {% include 'admin_navbar.html' %} 
+    {% if session['role'] == 'supervisor' %}
+        {% include 'supervisor_navbar.html' %}
+    {% else %}
+        {% include 'admin_navbar.html' %} 
+    {% endif %}
     
     <div class="container-fluid mt-4 content-container">
         
@@ -100,6 +104,24 @@
                             </select>
                         </div>
                         
+                        <!-- YENİ: Alt Növ Filtri (Dropdown) -->
+                        <div class="col-md-3 mb-3">
+                            <label class="form-label">Alt Növ (Detal)</label>
+                            <select class="form-select form-select-sm" name="subtype_filter">
+                                <option value="">Bütün Alt Növlər</option>
+                                <optgroup label="Cərimə Növləri">
+                                    {% for ft in fine_types %}
+                                        <option value="{{ ft }}" {% if selected_filters.subtype_filter == ft %}selected{% endif %}>{{ ft }}</option>
+                                    {% endfor %}
+                                </optgroup>
+                                <optgroup label="Təmir Növləri">
+                                    {% for rt in repair_types %}
+                                        <option value="{{ rt }}" {% if selected_filters.subtype_filter == rt %}selected{% endif %}>{{ rt }}</option>
+                                    {% endfor %}
+                                </optgroup>
+                            </select>
+                        </div>
+
                         <div class="col-md-3 mb-3">
                             <label class="form-label">Operatora görə</label>
                             <select class="form-select form-select-sm" name="user_username">
@@ -136,7 +158,10 @@
                         <th>Sürücü (Xərc anında)</th>      
                         <th>Köməkçi (Xərc anında)</th>    
                         <th>Planlamaçı (Xərc anında)</th> 
-                        <th>Növ</th> <th class="text-end">Məbləğ (AZN)</th>
+                        <th>Növ</th>
+                        <!-- YENİ SÜTUN -->
+                        <th>Alt Növ (Detal)</th>
+                        <th class="text-end">Məbləğ (AZN)</th>
                         <th class="text-end">Litr</th>
                         <th>Açıqlama</th>
                         <th class="text-center">Sil</th> </tr>
@@ -144,7 +169,7 @@
                 <tbody>
                     {% if not reports %}
                     <tr>
-                        <td colspan="11" class="text-center text-muted">Axtarışa uyğun nəticə tapılmadı.</td> 
+                        <td colspan="12" class="text-center text-muted">Axtarışa uyğun nəticə tapılmadı.</td> 
                     </tr>
                     {% endif %}
                     
@@ -169,9 +194,19 @@
                             {% else %}<span class="badge bg-secondary">{{ item.expense.type }}</span>{% endif %}
                         </td>
                         
+                        <!-- YENİ: Alt Növü Göstər -->
+                        <td>
+                            {% if item.expense.subtype and item.expense.subtype != '-' %}
+                                <span class="badge bg-light text-dark border">{{ item.expense.subtype }}</span>
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+
                         <td class="text-end text-danger fw-bold">{{ "%.2f"|format(item.expense.amount) }}</td>
                         <td class="text-end">{{ item.expense.litr if item.expense.litr > 0 else '-' }}</td>
-                        <td>{{ item.expense.description }}</td>
+                        <!-- YENİ: Təmiz açıqlamanı göstər -->
+                        <td>{{ item.expense.clean_description }}</td>
                         <td class="text-center">
                             <form method="POST" action="{{ url_for('delete_expense', id=item.expense.expense_id) }}" onsubmit="return confirm('Bu xərci silmək istədiyinizə əminsiniz?');">
                                 <button type="submit" class="btn btn-sm btn-outline-danger" title="Sil">
@@ -184,7 +219,7 @@
                 </tbody>
                 <tfoot>
                     <tr class="bg-light fw-bold">
-                        <td colspan="8" class="text-end">Yekun Cəm:</td> 
+                        <td colspan="9" class="text-end">Yekun Cəm:</td> 
                         <td class="text-end text-danger fs-5">{{ "%.2f"|format(total_amount) }} AZN</td>
                         <td colspan="2"></td> 
                     </tr>

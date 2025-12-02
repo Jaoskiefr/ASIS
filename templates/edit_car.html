@@ -37,13 +37,37 @@
                             <label class="form-label">Model</label>
                             <input type="text" class="form-control" name="model" value="{{ car.model }}" required>
                         </div>
-                        <div class="col-md-3 mb-3">
+                        <div class="col-md-2 mb-3">
                             <label class="form-label">Sürücü Təyinatı</label>
                             <select class="form-select" name="driver_id">
                                 <option value="">Təyin Olunmayıb (Boş)</option>
                                 {% for driver in drivers %}
                                     <option value="{{ driver.id }}" {% if driver.id == car.driver_id %}selected{% endif %}>
-                                        {{ driver.name }} ({{ driver.id }})
+                                        {{ driver.name }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                            <div class="form-text text-muted" style="font-size: 0.75rem;">Yalnız boş sürücülər görünür.</div>
+                        </div>
+                        <div class="col-md-2 mb-3">
+                            <label class="form-label">Köməkçi Təyinatı</label>
+                            <select class="form-select" name="assistant_id">
+                                <option value="">Təyin Olunmayıb (Boş)</option>
+                                {% for assistant in assistants %}
+                                    <option value="{{ assistant.id }}" {% if assistant.id == car.assistant_id %}selected{% endif %}>
+                                        {{ assistant.name }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                            <div class="form-text text-muted" style="font-size: 0.75rem;">Yalnız boş köməkçilər görünür.</div>
+                        </div>
+                        <div class="col-md-2 mb-3">
+                            <label class="form-label">Planlamaçı Təyinatı</label>
+                            <select class="form-select" name="planner_id">
+                                <option value="">Təyin Olunmayıb (Boş)</option>
+                                {% for planner in planners %}
+                                    <option value="{{ planner.id }}" {% if planner.id == car.planner_id %}selected{% endif %}>
+                                        {{ planner.name }}
                                     </option>
                                 {% endfor %}
                             </select>

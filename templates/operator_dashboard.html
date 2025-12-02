@@ -156,6 +156,8 @@
                                                     <tr>
                                                         <th>Tarix / Saat</th>
                                                         <th>Növ</th>
+                                                        <!-- YENİ: Alt Növ Sütunu -->
+                                                        <th>Alt Növ (Detal)</th>
                                                         <th class="text-end">Məbləğ (AZN)</th>
                                                         <th class="text-end">Litr</th>
                                                         <th>Açıqlama</th>
@@ -177,9 +179,17 @@
                                                             {% elif expense.type == 'Yemək' %}<span class="badge bg-primary">Yemək</span>
                                                             {% else %}<span class="badge bg-secondary">{{ expense.type }}</span>{% endif %}
                                                         </td>
+                                                        <!-- YENİ: Alt Növü Göstər -->
+                                                        <td>
+                                                            {% if expense.subtype and expense.subtype != '-' %}
+                                                                <span class="badge bg-light text-dark border">{{ expense.subtype }}</span>
+                                                            {% else %}
+                                                                <span class="text-muted">-</span>
+                                                            {% endif %}
+                                                        </td>
                                                         <td class="text-end text-danger fw-bold">{{ "%.2f"|format(expense.amount) }}</td>
                                                         <td class="text-end">{{ expense.litr if expense.litr > 0 else '-' }}</td>
-                                                        <td>{{ expense.description }}</td>
+                                                        <td>{{ expense.clean_description }}</td>
                                                         <td>{{ expense.driver_name }}</td>
                                                         <td>{{ expense.assistant_name }}</td>
                                                         <td>{{ expense.planner_name }}</td>
@@ -236,6 +246,24 @@
                                 <option value="AI-95">AI-95</option>
                             </select>
                         </div>
+
+                        <div class="mb-3" id="fineTypeGroup" style="display: none;">
+                            <label class="form-label">Cərimə Səbəbi</label>
+                            <select class="form-select" id="fineSubType" name="fine_subtype">
+                                {% for ft in fine_types %}
+                                    <option value="{{ ft }}">{{ ft }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="mb-3" id="repairTypeGroup" style="display: none;">
+                            <label class="form-label">Təmir Növü</label>
+                            <select class="form-select" id="repairSubType" name="repair_subtype">
+                                {% for rt in repair_types %}
+                                    <option value="{{ rt }}">{{ rt }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
                         
                         <div class="mb-3">
                             <label for="amount" class="form-label" id="amountLabel">Məbləğ (AZN)</label>
@@ -261,6 +289,7 @@
             </div>
         </div>
     </div>
+    <!-- Meta Modal (Olduğu kimi qalır) -->
     <div class="modal fade" id="carMetaModal" tabindex="-1" aria-labelledby="carMetaModalLabel" aria-hidden="true">
         <div class="modal-dialog">
             <div class="modal-content">
@@ -335,8 +364,16 @@
             
             const expenseModal = document.getElementById('expenseModal');
             const expenseTypeSelect = document.getElementById('expenseType');
+            
             const fuelTypeGroup = document.getElementById('fuelTypeGroup');
             const fuelSubTypeSelect = document.getElementById('fuelSubType');
+            
+            const fineTypeGroup = document.getElementById('fineTypeGroup');
+            const fineSubTypeSelect = document.getElementById('fineSubType');
+
+            const repairTypeGroup = document.getElementById('repairTypeGroup');
+            const repairSubTypeSelect = document.getElementById('repairSubType');
+
             const litrGroup = document.getElementById('litrGroup');
 
             // --- YENİ XƏRC NÖVÜ MƏNTİQİ ---
@@ -344,20 +381,28 @@
                 expenseTypeSelect.addEventListener('change', function() {
                     const selectedType = this.value;
                     
+                    // Reset all
+                    fuelTypeGroup.style.display = 'none';
+                    fuelSubTypeSelect.removeAttribute('required');
+                    
+                    fineTypeGroup.style.display = 'none';
+                    fineSubTypeSelect.removeAttribute('required');
+
+                    repairTypeGroup.style.display = 'none';
+                    repairSubTypeSelect.removeAttribute('required');
+
+                    litrGroup.style.display = 'none';
+
                     if (selectedType === 'Yanacaq') {
-                        // Yanacaq seçilibsə, həm yanacaq növünü, həm də litri göstər
                         fuelTypeGroup.style.display = 'block';
-                        fuelSubTypeSelect.setAttribute('required', 'required'); // Yanacaq növü məcburidir
-                        
+                        fuelSubTypeSelect.setAttribute('required', 'required');
                         litrGroup.style.display = 'block';
-                        // litrGroup.querySelector('#litr').setAttribute('required', 'required'); // Litr məcburi deyil
-                    } else {
-                        // Başqa bir şey seçilibsə, hər ikisini gizlət
-                        fuelTypeGroup.style.display = 'none';
-                        fuelSubTypeSelect.removeAttribute('required'); // Artıq məcburi deyil
-                        
-                        litrGroup.style.display = 'none';
-                        // litrGroup.querySelector('#litr').removeAttribute('required');
+                    } else if (selectedType === 'Cərimə') {
+                        fineTypeGroup.style.display = 'block';
+                        fineSubTypeSelect.setAttribute('required', 'required');
+                    } else if (selectedType === 'Təmir') {
+                        repairTypeGroup.style.display = 'block';
+                        repairSubTypeSelect.setAttribute('required', 'required');
                     }
                 });
             }
@@ -374,8 +419,17 @@
 
                     // Formu sıfırla (əvvəlki seçimlər qalmasın)
                     document.getElementById('expenseForm').reset();
+                    
+                    // Display reset
                     fuelTypeGroup.style.display = 'none';
                     fuelSubTypeSelect.removeAttribute('required');
+                    
+                    fineTypeGroup.style.display = 'none';
+                    fineSubTypeSelect.removeAttribute('required');
+                    
+                    repairTypeGroup.style.display = 'none';
+                    repairSubTypeSelect.removeAttribute('required');
+                    
                     litrGroup.style.display = 'none';
                 });
             }

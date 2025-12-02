@@ -1,10 +1,13 @@
 # -*- coding: utf-8 -*-
 from db import get_connection
-from flask import Flask, render_template, request, redirect, url_for, session, flash
+from flask import Flask, render_template, request, redirect, url_for, session, flash, send_file
 from datetime import datetime, date, timedelta
 from dateutil.relativedelta import relativedelta
 from functools import wraps
 import socket
+import json
+import io
+import re  # Regex modulunu əlavə etdik
 
 app = Flask(__name__)
 app.secret_key = 'ASIS_Sizin_Real_Gizli_Acariniz_Burada_Olsun' 
@@ -19,6 +22,47 @@ EXPENSE_TYPES = [
     'Cərimə',
     'Digər'
 ]
+
+# Cərimə Növləri
+FINE_TYPES = [
+    'Avtobus zolağı',
+    'Sürət həddini aşma',
+    'Dayanma-durma qaydası',
+    'Qırmızı işıq',
+    'Təhlükəsizlik kəməri',
+    'Texniki baxış / Sığorta yoxdur',
+    'Digər'
+]
+
+# Təmir Növləri
+REPAIR_TYPES = [
+    'Təkər təmiri / Yenisi',
+    'Akumulyator',
+    'Yağ dəyişimi',
+    'Nakladka / Əyləc sistemi',
+    'Mühərrik təmiri',
+    'Kosmetik / Dəmirçi işi',
+    'Digər'
+]
+
+# --- KÖMƏKÇİ PARSE FUNKSİYASI ---
+def parse_expense_description(description):
+    """
+    Açıqlama mətnindən [Alt Növ] hissəsini ayırır.
+    Qaytarır: (alt_nov, temiz_aciqlama)
+    """
+    if not description:
+        return "-", "-"
+    
+    # Regex: Sətrin əvvəlində [Hər hansı mətn] axtarır
+    match = re.match(r'^\[(.*?)\]\s*(.*)', description, re.DOTALL)
+    if match:
+        subtype = match.group(1)
+        clean_desc = match.group(2)
+        if not clean_desc: clean_desc = "-"
+        return subtype, clean_desc
+    else:
+        return "-", description
 
 # --- VERİLƏNLƏR BAZASI KÖMƏKÇİ FUNKSİYALARI ---
 
@@ -143,13 +187,10 @@ def get_all_users():
 # --- ƏSAS FUNKSİONALLIQ (LOG, XƏRC VƏ S.) ---
 
 def log_action(action, details, status='success'):
-    """Logları birbaşa MySQL bazasına yazır."""
     try:
         ip = request.remote_addr if request else '127.0.0.1'
         username = session.get('user', 'System')
         hostname = ip
-        
-        # Hostname tapmağa çalışırıq (timeout ilə ki, gecikmə olmasın)
         try:
             if ip in ['127.0.0.1', '::1']:
                 hostname = 'localhost'
@@ -175,7 +216,6 @@ def log_action(action, details, status='success'):
 
 def insert_expense(car_id, expense_type, amount, litr, description,
                    driver_id, assistant_id, planner_id, entered_by):
-    """Xərci bazaya yazır."""
     conn = get_connection()
     try:
         with conn.cursor() as cursor:
@@ -192,11 +232,9 @@ def insert_expense(car_id, expense_type, amount, litr, description,
         conn.close()
 
 def get_dashboard_data():
-    """Operator paneli üçün məlumatları hazırlayır (Bazadan oxuyur)."""
     conn = get_connection()
     try:
         with conn.cursor() as cursor:
-            # 1. Bütün avtomobilləri çək
             cursor.execute("""
                 SELECT c.*, 
                        d.name as driver_name, 
@@ -210,10 +248,8 @@ def get_dashboard_data():
             """)
             cars = cursor.fetchall()
 
-            # 2. Hər avtomobil üçün aktiv xərcləri (silinməmiş) çək
             full_data = []
             for car in cars:
-                # Brend/Model ayrımı
                 brand = car.get('brand') or ""
                 model_name = car.get('model_name') or ""
                 if (not brand or not model_name) and car.get('model'):
@@ -221,7 +257,6 @@ def get_dashboard_data():
                     if not brand and parts: brand = parts[0]
                     if not model_name and len(parts) > 1: model_name = parts[1]
 
-                # Xərcləri çək - Car ID integer olaraq ötürülür
                 cursor.execute("""
                     SELECT e.*, 
                            d.name as driver_name, 
@@ -238,17 +273,21 @@ def get_dashboard_data():
                 
                 total_expense = sum(float(e['amount']) for e in expenses)
                 
-                # Timestamp-i stringə çevirək
                 processed_expenses = []
                 for e in expenses:
                     e_dict = dict(e)
                     if isinstance(e['created_at'], str):
-                         # Əgər bazadan string gələrsə (bəzi konfiqlərdə olur)
                          e_dict['timestamp_str'] = e['created_at']
                     elif e['created_at']:
                          e_dict['timestamp_str'] = e['created_at'].strftime("%d.%m.%Y %H:%M")
                     else:
                          e_dict['timestamp_str'] = "-"
+                    
+                    # YENİ: Description-u parçala (Alt növ və təmiz açıqlama)
+                    subtype, clean_desc = parse_expense_description(e_dict.get('description', ''))
+                    e_dict['subtype'] = subtype
+                    e_dict['clean_description'] = clean_desc
+                    
                     processed_expenses.append(e_dict)
 
                 car_data = {
@@ -263,7 +302,6 @@ def get_dashboard_data():
                     "entered_by": processed_expenses[0]['entered_by'] if processed_expenses else "Yoxdur",
                     "notes": car.get('notes') or "",
                     "expenses": processed_expenses,
-                    # Modal üçün lazım olan sahələr
                     "brand_raw": brand,
                     "model_name_raw": model_name,
                     "driver_id": car['driver_id'],
@@ -278,46 +316,25 @@ def get_dashboard_data():
         conn.close()
 
 def calculate_experience(start_date_input):
-    """
-    Tarixi hesablayan funksiya - Server xətalarını önləmək üçün
-    daha möhkəm (robust) yazıldı.
-    """
-    if not start_date_input:
-        return "-"
-    
+    if not start_date_input: return "-"
     try:
         start_date = None
-        
-        # 1. Əgər input stringdirsə, onu date obyektinə çevir
         if isinstance(start_date_input, str):
-            # Bəzi hallarda boş string gələ bilər
-            if start_date_input.strip() == "":
-                return "-"
+            if start_date_input.strip() == "": return "-"
             try:
                 start_date = datetime.strptime(start_date_input, '%Y-%m-%d').date()
-            except ValueError:
-                # Fərqli format ola bilər və ya '0000-00-00'
-                return "Tarix xətası"
-        
-        # 2. Əgər datetime obyektidirsə (saat ilə), sadəcə tarixi götür
+            except ValueError: return "Tarix xətası"
         elif isinstance(start_date_input, datetime):
             start_date = start_date_input.date()
-            
-        # 3. Əgər artıq date obyektidirsə, olduğu kimi saxla
         elif isinstance(start_date_input, date):
             start_date = start_date_input
-            
         else:
-            # Naməlum tip
             return "-"
 
-        if not start_date:
-            return "-"
+        if not start_date: return "-"
 
         today = datetime.now().date()
-        
-        if start_date > today:
-            return "Başlamayıb"
+        if start_date > today: return "Başlamayıb"
             
         delta = relativedelta(today, start_date)
         years = delta.years
@@ -327,15 +344,19 @@ def calculate_experience(start_date_input):
         if years > 0: experience_parts.append(f"{years} il")
         if months > 0: experience_parts.append(f"{months} ay")
         
-        if not experience_parts:
-            return "Yeni" if delta.days >= 0 else "-"
+        if not experience_parts: return "Yeni" if delta.days >= 0 else "-"
             
         return ", ".join(experience_parts)
-        
     except Exception as e:
-        # Hər hansı digər xəta olarsa server çökməsin, sadəcə xəta yazsın
         print(f"Experience calc error: {e}")
         return "Xəta"
+
+# --- JSON SERİALIZER HELPER ---
+class DateTimeEncoder(json.JSONEncoder):
+    def default(self, o):
+        if isinstance(o, (date, datetime)):
+            return o.isoformat()
+        return super().default(o)
 
 # --- DEKORATORLAR ---
 
@@ -416,7 +437,6 @@ def index():
         return redirect(url_for('supervisor_dashboard'))
 
     if session['role'] == 'admin':
-        # Admin Dashboard Statistikaları (Bazadan)
         conn = get_connection()
         try:
             with conn.cursor() as cursor:
@@ -431,7 +451,6 @@ def index():
                 cursor.execute("SELECT COUNT(*) as c FROM planners")
                 pl_count = cursor.fetchone()['c']
                 
-                # Aylıq xərc
                 now = datetime.now()
                 cursor.execute("""
                     SELECT SUM(amount) as total FROM expenses 
@@ -440,7 +459,6 @@ def index():
                 res = cursor.fetchone()
                 monthly_total = float(res['total']) if res and res['total'] else 0.0
                 
-                # Qrafik üçün
                 cursor.execute("""
                     SELECT type, SUM(amount) as total FROM expenses 
                     WHERE is_deleted=0 AND MONTH(created_at)=%s AND YEAR(created_at)=%s
@@ -476,7 +494,8 @@ def index():
         conn.close()
 
     return render_template('operator_dashboard.html', 
-        cars=dashboard_data, drivers=drivers, assistants=assistants, planners=planners)
+        cars=dashboard_data, drivers=drivers, assistants=assistants, planners=planners,
+        fine_types=FINE_TYPES, repair_types=REPAIR_TYPES)
 
 @app.route('/add_expense', methods=['POST'])
 @operator_required
@@ -487,15 +506,25 @@ def add_expense():
         amount = float(request.form.get('amount', 0))
         litr = float(request.form.get('litr', 0) or 0)
         description = request.form.get('description', '')
+        
         fuel_subtype = request.form.get('fuel_subtype', '')
+        fine_subtype = request.form.get('fine_subtype', '')
+        repair_subtype = request.form.get('repair_subtype', '')
 
+        prefix = ""
         if expense_type == 'Yanacaq' and fuel_subtype:
-            description = f"{fuel_subtype} - {description}" if description else fuel_subtype
+            prefix = f"[{fuel_subtype}] "
+        elif expense_type == 'Cərimə' and fine_subtype:
+            prefix = f"[{fine_subtype}] "
+        elif expense_type == 'Təmir' and repair_subtype:
+            prefix = f"[{repair_subtype}] "
+        
+        final_description = f"{prefix}{description}"
 
         car = get_car_by_id(car_id)
         if car:
             insert_expense(
-                car_id, expense_type, amount, litr, description,
+                car_id, expense_type, amount, litr, final_description,
                 car['driver_id'], car['assistant_id'], car['planner_id'], session['user']
             )
             log_action('ADD_EXPENSE', f"{car['car_number']} - {amount} AZN ({expense_type})", 'success')
@@ -514,7 +543,6 @@ def add_expense():
 def update_car_meta():
     car_id = request.form.get('car_id')
     
-    # Boş stringləri None (NULL) kimi saxlayaq
     def get_val_or_none(field):
         val = request.form.get(field)
         return int(val) if val else None
@@ -544,7 +572,7 @@ def update_car_meta():
     flash('Məlumatlar yeniləndi.', 'success')
     return redirect(url_for('index'))
 
-# --- ADMIN ROUTES (Sürücülər, Maşınlar, və s.) ---
+# --- ADMIN ROUTES ---
 
 @app.route('/admin/drivers')
 @operator_required
@@ -554,17 +582,11 @@ def admin_drivers():
         with conn.cursor() as cursor:
             cursor.execute("SELECT * FROM drivers ORDER BY name")
             drivers = cursor.fetchall()
-            
-            # Xərci olub olmadığını yoxlayaq
             for d in drivers:
-                # Driver ID-ni integerə çevirək
                 driver_id = int(d['id'])
                 cursor.execute("SELECT id FROM expenses WHERE driver_id_at_expense=%s AND is_deleted=0 LIMIT 1", (driver_id,))
                 d['has_expenses'] = cursor.fetchone() is not None
-                
-                # Tarix hesablaması (səhvi tutmaq üçün qoruyucu içində)
                 d['experience_str'] = calculate_experience(d.get('start_date'))
-                
     except Exception as e:
         flash(f"Server xətası (Sürücülər): {str(e)}", "danger")
         drivers = []
@@ -577,9 +599,7 @@ def admin_drivers():
 def add_driver():
     name = request.form.get('name')
     if not name: return redirect(url_for('admin_drivers'))
-    
     start_date = request.form.get('start_date') or None
-
     conn = get_connection()
     try:
         with conn.cursor() as cursor:
@@ -607,7 +627,6 @@ def edit_driver(id):
             conn.close()
         flash('Yeniləndi', 'success')
         return redirect(url_for('admin_drivers'))
-    
     driver = get_driver_by_id(id)
     return render_template('edit_driver.html', driver=driver)
 
@@ -617,13 +636,10 @@ def delete_driver(id):
     conn = get_connection()
     try:
         with conn.cursor() as cursor:
-            # Əgər xərc varsa silmə
             cursor.execute("SELECT id FROM expenses WHERE driver_id_at_expense=%s AND is_deleted=0 LIMIT 1", (id,))
             if cursor.fetchone():
                 flash('Xərcləri olan sürücünü silmək olmaz.', 'danger')
                 return redirect(url_for('admin_drivers'))
-            
-            # Maşınlardan çıxar
             cursor.execute("UPDATE cars SET driver_id=NULL WHERE driver_id=%s", (id,))
             cursor.execute("DELETE FROM drivers WHERE id=%s", (id,))
         conn.commit()
@@ -637,61 +653,50 @@ def delete_driver(id):
 def bulk_add_driver():
     bulk_data = request.form.get('bulk_data', '')
     added_count = 0
-    skipped_count = 0
-
     conn = get_connection()
     try:
         with conn.cursor() as cursor:
-            # Mövcud lisenziya nömrələrini yoxla ki, təkrar düşməsin
             cursor.execute("SELECT license_no FROM drivers WHERE license_no IS NOT NULL AND license_no != ''")
             existing_licenses = {row['license_no'] for row in cursor.fetchall()}
-
             for line in bulk_data.splitlines():
                 parts = line.split(';')
-                if not parts or not parts[0].strip():
-                    continue
-                
+                if not parts or not parts[0].strip(): continue
                 name = parts[0].strip()
                 license_no = parts[1].strip() if len(parts) > 1 else None
                 phone = parts[2].strip() if len(parts) > 2 else None
                 start_date = parts[3].strip() if len(parts) > 3 else None
 
-                if license_no and license_no in existing_licenses:
-                    skipped_count += 1
-                    continue
-                
+                if license_no and license_no in existing_licenses: continue
                 if start_date:
-                    try:
-                        datetime.strptime(start_date, '%Y-%m-%d')
-                    except ValueError:
-                        start_date = None
+                    try: datetime.strptime(start_date, '%Y-%m-%d')
+                    except ValueError: start_date = None
 
                 cursor.execute("""
                     INSERT INTO drivers (name, license_no, phone, start_date) 
                     VALUES (%s, %s, %s, %s)
                 """, (name, license_no, phone, start_date))
-                
-                if license_no:
-                    existing_licenses.add(license_no)
+                if license_no: existing_licenses.add(license_no)
                 added_count += 1
-
         conn.commit()
     finally:
         conn.close()
-
-    log_action('BULK_ADD_DRIVER', f"{added_count} sürücü toplu əlavə edildi.", 'success')
     flash(f"{added_count} sürücü əlavə edildi.", 'success')
     return redirect(url_for('admin_drivers'))
 
 # --- ADMIN REPORTS ---
 
 @app.route('/admin/reports')
-@admin_required
 def admin_reports():
+    if session.get('role') not in ['admin', 'supervisor']:
+        flash('İcazə yoxdur.', 'danger')
+        return redirect(url_for('index'))
+
     # Filtrlər
     f_car = request.args.get('car_id')
     f_driver = request.args.get('driver_id')
     f_type = request.args.get('expense_type')
+    f_subtype = request.args.get('subtype_filter')
+
     start_date = request.args.get('start_date') or (datetime.now() - timedelta(days=7)).strftime('%Y-%m-%d')
     end_date = request.args.get('end_date')
 
@@ -723,6 +728,10 @@ def admin_reports():
     if f_type:
         sql += " AND e.type = %s"
         params.append(f_type)
+    if f_subtype:
+        sql += " AND e.description LIKE %s"
+        params.append(f"%[{f_subtype}]%")
+
     if start_date:
         sql += " AND DATE(e.created_at) >= %s"
         params.append(start_date)
@@ -737,7 +746,6 @@ def admin_reports():
         with conn.cursor() as cursor:
             cursor.execute(sql, tuple(params))
             reports = cursor.fetchall()
-            
             total_amount = sum(float(r['amount']) for r in reports)
 
             formatted_reports = []
@@ -745,6 +753,11 @@ def admin_reports():
                 expense_obj = r
                 expense_obj['timestamp'] = r['created_at']
                 
+                # YENİ: Admin panelində də açıqlamanı parse edirik
+                subtype, clean_desc = parse_expense_description(r.get('description', ''))
+                expense_obj['subtype'] = subtype
+                expense_obj['clean_description'] = clean_desc
+
                 car_obj = {'car_number': r['car_number'], 'model': r['model']} if r['car_number'] else None
                 user_obj = {'fullname': r['user_fullname']} if r['user_fullname'] else None
                 
@@ -775,12 +788,16 @@ def admin_reports():
         reports=formatted_reports, total_amount=total_amount,
         cars=cars, drivers=drivers, assistants=assistants, planners=planners, operators=operators,
         expense_types=EXPENSE_TYPES,
+        fine_types=FINE_TYPES, repair_types=REPAIR_TYPES, 
         selected_filters=request.args
     )
 
 @app.route('/admin/expense/delete/<int:id>', methods=['POST'])
-@admin_required
 def delete_expense(id):
+    if session.get('role') not in ['admin', 'supervisor']:
+        flash('İcazə yoxdur.', 'danger')
+        return redirect(url_for('index'))
+        
     conn = get_connection()
     try:
         with conn.cursor() as cursor:
@@ -793,7 +810,7 @@ def delete_expense(id):
     finally:
         conn.close()
     
-    log_action('DELETE_EXPENSE', f"Xərc ID {id} silindi", 'success')
+    log_action('DELETE_EXPENSE', f"Xərc ID {id} silindi ({session['role']})", 'success')
     flash('Xərc silindi.', 'success')
     return redirect(url_for('admin_reports'))
 
@@ -818,7 +835,6 @@ def admin_deleted_reports():
                 ORDER BY e.deleted_at DESC
             """)
             rows = cursor.fetchall()
-            
             reports = []
             for r in rows:
                 r['timestamp'] = r['created_at']
@@ -855,41 +871,24 @@ def supervisor_dashboard():
     conn = get_connection()
     try:
         with conn.cursor() as cursor:
-            # Statistika
             cursor.execute("SELECT COUNT(*) as c FROM users")
             total_users = cursor.fetchone()['c']
-            
             cursor.execute("SELECT COUNT(*) as c FROM users WHERE is_active=1")
             active_users = cursor.fetchone()['c']
-            
             cursor.execute("SELECT COUNT(*) as c FROM users WHERE is_active=0")
             passive_users = cursor.fetchone()['c']
-            
             cursor.execute("SELECT COUNT(*) as c FROM audit_logs")
             total_logs = cursor.fetchone()['c']
-            
-            # Chart data (Rollar üzrə)
             cursor.execute("SELECT role, COUNT(*) as count FROM users GROUP BY role")
             roles_data = cursor.fetchall()
             
             labels = [r['role'] for r in roles_data]
             data = [r['count'] for r in roles_data]
             
-            stats = {
-                'total_users': total_users,
-                'active_users': active_users,
-                'passive_users': passive_users,
-                'total_logs': total_logs
-            }
-            
-            chart_data = {
-                'labels': labels,
-                'data': data
-            }
-            
+            stats = {'total_users': total_users, 'active_users': active_users, 'passive_users': passive_users, 'total_logs': total_logs}
+            chart_data = {'labels': labels, 'data': data}
     finally:
         conn.close()
-
     return render_template('supervisor_dashboard.html', stats=stats, chart_data=chart_data)
 
 @app.route('/supervisor/reports')
@@ -901,17 +900,9 @@ def supervisor_reports():
     
     sql = "SELECT * FROM audit_logs WHERE 1=1"
     params = []
-    
-    if username:
-        sql += " AND username = %s"
-        params.append(username)
-    if action:
-        sql += " AND action = %s"
-        params.append(action)
-    if start_date:
-        sql += " AND DATE(timestamp) >= %s"
-        params.append(start_date)
-        
+    if username: sql += " AND username = %s"; params.append(username)
+    if action: sql += " AND action = %s"; params.append(action)
+    if start_date: sql += " AND DATE(timestamp) >= %s"; params.append(start_date)
     sql += " ORDER BY timestamp DESC LIMIT 500"
 
     conn = get_connection()
@@ -919,7 +910,6 @@ def supervisor_reports():
         with conn.cursor() as cursor:
             cursor.execute(sql, tuple(params))
             reports = cursor.fetchall()
-            
             cursor.execute("SELECT DISTINCT username FROM audit_logs")
             all_usernames = [r['username'] for r in cursor.fetchall()]
             cursor.execute("SELECT DISTINCT action FROM audit_logs")
@@ -928,14 +918,87 @@ def supervisor_reports():
             all_hostnames = [r['hostname'] for r in cursor.fetchall()]
     finally:
         conn.close()
-
     return render_template('supervisor_reports.html',
         reports=reports,
         all_usernames=all_usernames, all_actions=all_actions, all_hostnames=all_hostnames,
         selected_filters=request.args
     )
 
-# --- DIGƏR ADMIN FUNKSIYALARI (Maşınlar, Köməkçilər, Planlamaçılar, İstifadəçilər) ---
+@app.route('/supervisor/data')
+@supervisor_required
+def supervisor_data():
+    return render_template('supervisor_data.html')
+
+@app.route('/supervisor/export')
+@supervisor_required
+def export_db():
+    tables = ['users', 'cars', 'drivers', 'assistants', 'planners', 'expenses', 'expense_types', 'audit_logs']
+    db_dump = {}
+    
+    conn = get_connection()
+    try:
+        with conn.cursor() as cursor:
+            for table in tables:
+                cursor.execute(f"SELECT * FROM {table}")
+                rows = cursor.fetchall()
+                db_dump[table] = rows
+    finally:
+        conn.close()
+    
+    json_str = json.dumps(db_dump, cls=DateTimeEncoder, ensure_ascii=False, indent=2)
+    mem = io.BytesIO()
+    mem.write(json_str.encode('utf-8'))
+    mem.seek(0)
+    filename = f"asis_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+    return send_file(mem, as_attachment=True, download_name=filename, mimetype='application/json')
+
+@app.route('/supervisor/import', methods=['POST'])
+@supervisor_required
+def import_db():
+    if 'backup_file' not in request.files:
+        flash('Fayl seçilməyib.', 'danger')
+        return redirect(url_for('supervisor_data'))
+    
+    file = request.files['backup_file']
+    if file.filename == '':
+        flash('Fayl seçilməyib.', 'danger')
+        return redirect(url_for('supervisor_data'))
+
+    try:
+        data = json.load(file)
+        tables = ['users', 'cars', 'drivers', 'assistants', 'planners', 'expenses', 'expense_types', 'audit_logs']
+        
+        conn = get_connection()
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute("SET FOREIGN_KEY_CHECKS=0;")
+                for table in tables:
+                    if table in data:
+                        rows = data[table]
+                        if not rows: continue
+                        cursor.execute(f"TRUNCATE TABLE {table}")
+                        for row in rows:
+                            columns = ', '.join(row.keys())
+                            placeholders = ', '.join(['%s'] * len(row))
+                            sql = f"INSERT INTO {table} ({columns}) VALUES ({placeholders})"
+                            cursor.execute(sql, list(row.values()))
+                cursor.execute("SET FOREIGN_KEY_CHECKS=1;")
+            conn.commit()
+            flash('Məlumat bazası uğurla bərpa edildi.', 'success')
+            log_action('DB_RESTORE', 'Bazadan geri yükləmə (Import) edildi', 'success')
+        except Exception as db_err:
+            conn.rollback()
+            flash(f"Baza xətası: {str(db_err)}", 'danger')
+            print(f"Import DB Error: {db_err}")
+        finally:
+            conn.close()
+
+    except Exception as e:
+        flash(f"Fayl xətası: {str(e)}", 'danger')
+    
+    return redirect(url_for('supervisor_data'))
+
+# --- DIGƏR ADMIN FUNKSIYALARI ---
 
 @app.route('/admin/cars')
 @operator_required
@@ -948,7 +1011,6 @@ def admin_cars():
             drivers = get_all_drivers()
             assistants = get_all_assistants()
             planners = get_all_planners()
-            
             for c in cars:
                 cursor.execute("SELECT id FROM expenses WHERE car_id=%s AND is_deleted=0 LIMIT 1", (c['id'],))
                 c['has_expenses'] = cursor.fetchone() is not None
@@ -977,16 +1039,55 @@ def add_car():
 def edit_car(id):
     if request.method == 'POST':
         conn = get_connection()
+        # Helper to handle empty strings as None
+        def get_val_or_none(field):
+            val = request.form.get(field)
+            return int(val) if val and val.isdigit() else None
+
         with conn.cursor() as cursor:
-            cursor.execute("UPDATE cars SET car_number=%s, model=%s, driver_id=%s WHERE id=%s",
-                (request.form['car_number'], request.form['model'], request.form.get('driver_id') or None, id))
+            cursor.execute("""
+                UPDATE cars SET car_number=%s, model=%s, driver_id=%s, assistant_id=%s, planner_id=%s 
+                WHERE id=%s
+            """, (
+                request.form['car_number'], 
+                request.form['model'], 
+                get_val_or_none('driver_id'),
+                get_val_or_none('assistant_id'),
+                get_val_or_none('planner_id'),
+                id
+            ))
         conn.commit()
         conn.close()
         return redirect(url_for('admin_cars'))
     
     car = get_car_by_id(id)
-    drivers = get_all_drivers()
-    return render_template('edit_car.html', car=car, drivers=drivers)
+    
+    # 1. Dublikat yoxlanışı üçün bütün maşınları çəkirik
+    all_cars = get_all_cars()
+    
+    # 2. Məşğul olan Sürücü və Köməkçiləri tapırıq (Cari maşını istisna etməklə)
+    occupied_driver_ids = set()
+    occupied_assistant_ids = set()
+    
+    for c in all_cars:
+        if c['id'] != id: # Cari redaktə olunan maşın deyil
+            if c['driver_id']: occupied_driver_ids.add(c['driver_id'])
+            if c['assistant_id']: occupied_assistant_ids.add(c['assistant_id'])
+    
+    # 3. Bütün personalı bazadan çəkirik
+    all_drivers = get_all_drivers()
+    all_assistants = get_all_assistants()
+    all_planners = get_all_planners() # Planlamaçılar çox maşına baxa bilər, filtrləmirik
+    
+    # 4. Yalnız boş olanları (və ya bu maşına təyin olunanları) siyahıda saxlayırıq
+    available_drivers = [d for d in all_drivers if d['id'] not in occupied_driver_ids]
+    available_assistants = [a for a in all_assistants if a['id'] not in occupied_assistant_ids]
+    
+    return render_template('edit_car.html', 
+                           car=car, 
+                           drivers=available_drivers, 
+                           assistants=available_assistants, 
+                           planners=all_planners)
 
 @app.route('/admin/car/delete/<int:id>', methods=['POST'])
 @operator_required
@@ -1014,7 +1115,6 @@ def bulk_add_car():
         with conn.cursor() as cursor:
             cursor.execute("SELECT car_number FROM cars")
             existing = {row['car_number'] for row in cursor.fetchall()}
-            
             for line in bulk_data.splitlines():
                 parts = line.split(';')
                 if len(parts) >= 2:
@@ -1029,7 +1129,6 @@ def bulk_add_car():
     flash('Toplu əlavə edildi.', 'success')
     return redirect(url_for('admin_cars'))
 
-# Assistants (Sadələşdirilmiş CRUD)
 @app.route('/admin/assistants')
 @operator_required
 def admin_assistants():
@@ -1067,7 +1166,6 @@ def edit_assistant(aid):
         conn.commit()
         conn.close()
         return redirect(url_for('admin_assistants'))
-    
     assistant = get_assistant_by_id(aid)
     return render_template('edit_assistant.html', assistant=assistant)
 
@@ -1092,14 +1190,12 @@ def bulk_add_assistant():
     try:
         with conn.cursor() as cursor:
             for line in bulk_data.splitlines():
-                if line.strip():
-                    cursor.execute("INSERT INTO assistants (name) VALUES (%s)", (line.strip(),))
+                if line.strip(): cursor.execute("INSERT INTO assistants (name) VALUES (%s)", (line.strip(),))
         conn.commit()
     finally:
         conn.close()
     return redirect(url_for('admin_assistants'))
 
-# Planners (Sadələşdirilmiş CRUD)
 @app.route('/admin/planners')
 @operator_required
 def admin_planners():
@@ -1161,14 +1257,12 @@ def bulk_add_planner():
     try:
         with conn.cursor() as cursor:
             for line in bulk_data.splitlines():
-                if line.strip():
-                    cursor.execute("INSERT INTO planners (name) VALUES (%s)", (line.strip(),))
+                if line.strip(): cursor.execute("INSERT INTO planners (name) VALUES (%s)", (line.strip(),))
         conn.commit()
     finally:
         conn.close()
     return redirect(url_for('admin_planners'))
 
-# Users (Admin)
 @app.route('/admin/users')
 @admin_required
 def admin_users():
@@ -1220,7 +1314,6 @@ def delete_user(id):
         conn.close()
     return redirect(url_for('admin_users'))
 
-# Supervisor Operations
 @app.route('/supervisor/operations')
 @supervisor_required
 def supervisor_operations():
@@ -1230,7 +1323,7 @@ def supervisor_operations():
 @app.route('/supervisor/operations/add_user', methods=['POST'])
 @supervisor_required
 def supervisor_add_user():
-    return add_user() # Reuse admin function logic
+    return add_user() 
 
 @app.route('/supervisor/user/edit/<int:id>', methods=['GET', 'POST'])
 @supervisor_required
@@ -1250,7 +1343,6 @@ def supervisor_edit_user(id):
         conn.commit()
         conn.close()
         return redirect(url_for('supervisor_operations'))
-    
     user = get_user_by_id(id)
     return render_template('supervisor_edit_user.html', user=user)
 
