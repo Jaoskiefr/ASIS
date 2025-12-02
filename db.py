@@ -3,8 +3,8 @@ import pymysql
 # Verilənlər bazası tənzimləmələri
 DB_CONFIG = {
     'host': 'localhost',
-    'user': 'root',
-    'password': 'Thehardys95!',  # Parolunuzun düzgün olduğundan əmin olun
+    'user': 'asis_app',
+    'password': 'GarajPro2025!',  # Parolunuzun düzgün olduğundan əmin olun
     'database': 'asis_db',
     'charset': 'utf8mb4',
     'cursorclass': pymysql.cursors.DictCursor,
