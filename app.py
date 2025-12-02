@@ -172,6 +172,7 @@ def get_all_cars(only_active=False):
         with conn.cursor() as cursor:
             # is_deleted yoxdursa xəta verməsin deyə sadə select
             sql = "SELECT * FROM cars WHERE 1=1"
+            # Əgər columns varsa check edə bilərik, amma sadəlik üçün:
             try:
                 sql += " AND (is_deleted = 0)"
             except: pass
@@ -232,8 +233,13 @@ def get_dashboard_data():
             cars = c.fetchall()
             data = []
             for car in cars:
+                # Burada da COLLATE əlavə edə bilərik, amma sürücü adları ilə xərclər arasında join yoxdur, birbaşa expense cədvəlindən götürülür
+                # JOIN expenses on drivers
                 c.execute("""SELECT e.*, d.name as driver_name, a.name as assistant_name, p.name as planner_name
-                             FROM expenses e LEFT JOIN drivers d ON e.driver_id_at_expense=d.id LEFT JOIN assistants a ON e.assistant_id_at_expense=a.id LEFT JOIN planners p ON e.planner_id_at_expense=p.id
+                             FROM expenses e 
+                             LEFT JOIN drivers d ON e.driver_id_at_expense=d.id 
+                             LEFT JOIN assistants a ON e.assistant_id_at_expense=a.id 
+                             LEFT JOIN planners p ON e.planner_id_at_expense=p.id
                              WHERE e.car_id=%s AND e.is_deleted=0 ORDER BY e.created_at DESC""", (car['id'],))
                 expenses = c.fetchall()
                 total = sum(float(e['amount'] or 0) for e in expenses)
@@ -395,11 +401,14 @@ def admin_reports():
         sd = request.args.get('start_date') or (datetime.now() - timedelta(days=7)).strftime('%Y-%m-%d')
         ed = request.args.get('end_date')
         
+        # XƏTA HƏLLİ: COLLATION PROBLEMİNİ HƏLL ETMƏK ÜÇÜN COLLATE ƏLAVƏ EDİLİR
+        # "LEFT JOIN users u ON e.entered_by = u.username COLLATE utf8mb4_unicode_ci"
+        
         sql = """SELECT e.*, e.created_at as timestamp, e.id as expense_id, c.car_number, c.model, u.fullname as user_fullname,
                  d.name as driver_name_at_expense, a.name as assistant_name_at_expense, p.name as planner_name_at_expense
                  FROM expenses e
                  LEFT JOIN cars c ON e.car_id = c.id
-                 LEFT JOIN users u ON e.entered_by = u.username
+                 LEFT JOIN users u ON e.entered_by = u.username COLLATE utf8mb4_unicode_ci
                  LEFT JOIN drivers d ON e.driver_id_at_expense = d.id
                  LEFT JOIN assistants a ON e.assistant_id_at_expense = a.id
                  LEFT JOIN planners p ON e.planner_id_at_expense = p.id
@@ -472,9 +481,14 @@ def admin_deleted_reports():
     conn = get_connection_safe()
     try:
         with conn.cursor() as c:
+            # Burda da COLLATE əlavə edirik
             c.execute("""SELECT e.*, c.car_number, u.fullname as user_fullname, d.name as driver_name_at_expense, a.name as assistant_name_at_expense, p.name as planner_name_at_expense
-                         FROM expenses e LEFT JOIN cars c ON e.car_id=c.id LEFT JOIN users u ON e.entered_by=u.username 
-                         LEFT JOIN drivers d ON e.driver_id_at_expense=d.id LEFT JOIN assistants a ON e.assistant_id_at_expense=a.id LEFT JOIN planners p ON e.planner_id_at_expense=p.id
+                         FROM expenses e 
+                         LEFT JOIN cars c ON e.car_id=c.id 
+                         LEFT JOIN users u ON e.entered_by=u.username COLLATE utf8mb4_unicode_ci
+                         LEFT JOIN drivers d ON e.driver_id_at_expense=d.id 
+                         LEFT JOIN assistants a ON e.assistant_id_at_expense=a.id 
+                         LEFT JOIN planners p ON e.planner_id_at_expense=p.id
                          WHERE e.is_deleted=1 ORDER BY e.deleted_at DESC""")
             rows = c.fetchall()
             rep = []
