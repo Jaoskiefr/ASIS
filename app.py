@@ -12,7 +12,7 @@ import re
 app = Flask(__name__)
 app.secret_key = 'ASIS_Sizin_Real_Gizli_Acariniz_Burada_Olsun' 
 
-# Proqram işə düşəndə bazanı yoxla və is_deleted / is_active sütunlarını əlavə et
+# Proqram işə düşəndə bazanı yoxlayır və lazımi sütunları (is_active, is_deleted) əlavə edir
 check_and_update_tables()
 
 # --- SABİT SİYAHILAR ---
@@ -1165,28 +1165,32 @@ def admin_reports():
         with conn.cursor() as cursor:
             cursor.execute(sql, tuple(params))
             reports = cursor.fetchall()
-            total_amount = sum(float(r['amount']) for r in reports)
-
+            
             formatted_reports = []
             for r in reports:
-                expense_obj = r
-                expense_obj['timestamp'] = r['created_at']
+                # 500 XƏTASININ QARŞISINI ALAN HİSSƏ:
+                # Əgər timestamp yoxdursa, indiki vaxtı qoyuruq ki, HTML-də error verməsin
+                if not r.get('created_at'):
+                    r['timestamp'] = datetime.now()
+                else:
+                    r['timestamp'] = r['created_at'] # Artıq datetime obyektidir
                 
                 subtype, clean_desc = parse_expense_description(r.get('description', ''))
-                expense_obj['subtype'] = subtype
-                expense_obj['clean_description'] = clean_desc
-
-                car_obj = {'car_number': r['car_number'], 'model': r['model']} if r['car_number'] else None
-                user_obj = {'fullname': r['user_fullname']} if r['user_fullname'] else None
                 
-                formatted_reports.append({
-                    'expense': expense_obj,
-                    'car': car_obj,
-                    'user': user_obj,
+                item = {
+                    'expense': r,
+                    'car': {'car_number': r['car_number'], 'model': r['model']} if r.get('car_number') else None,
+                    'user': {'fullname': r['user_fullname']},
                     'driver_name_at_expense': r['driver_name_at_expense'] or "-",
                     'assistant_name_at_expense': r['assistant_name_at_expense'] or "-",
-                    'planner_name_at_expense': r['planner_name_at_expense'] or "-"
-                })
+                    'planner_name_at_expense': r['planner_name_at_expense'] or "-",
+                    'subtype': subtype,
+                    'clean_description': clean_desc
+                }
+                formatted_reports.append(item)
+            
+            # Məbləğ null olarsa 0 götür
+            total_amount = sum(float(x['expense']['amount'] or 0) for x in formatted_reports)
             
             cursor.execute("SELECT * FROM cars ORDER BY car_number")
             cars = cursor.fetchall()
