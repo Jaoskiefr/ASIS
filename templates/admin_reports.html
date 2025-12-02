@@ -47,53 +47,35 @@
             <div class="card-body">
                 <form method="GET" action="{{ url_for('admin_reports') }}">
                     <div class="row align-items-end">
+                        <!-- Maşın Filtri -->
                         <div class="col-md-3 mb-3">
                             <label class="form-label">Avtomobilə görə</label>
                             <select class="form-select form-select-sm" name="car_id">
                                 <option value="">Bütün Avtomobillər</option>
                                 {% for car in cars %}
-                                    <option value="{{ car.id }}" {% if selected_filters.car_id == car.id %}selected{% endif %}>
+                                    <option value="{{ car.id }}" {% if selected_filters.car_id|string == car.id|string %}selected{% endif %}>
                                         {{ car.car_number }} ({{ car.model }})
                                     </option>
                                 {% endfor %}
                             </select>
                         </div>
+
+                        <!-- Sürücü Filtri -->
                         <div class="col-md-3 mb-3">
-                            <label class="form-label">Sürücüyə görə (Xərc anında)</label>
+                            <label class="form-label">Sürücüyə görə</label>
                             <select class="form-select form-select-sm" name="driver_id">
                                 <option value="">Bütün Sürücülər</option>
                                 {% for driver in drivers %}
-                                    <option value="{{ driver.id }}" {% if selected_filters.driver_id == driver.id %}selected{% endif %}>
+                                    <option value="{{ driver.id }}" {% if selected_filters.driver_id|string == driver.id|string %}selected{% endif %}>
                                         {{ driver.name }}
                                     </option>
                                 {% endfor %}
                             </select>
                         </div>
-                        <div class="col-md-3 mb-3">
-                            <label class="form-label">Köməkçiyə görə (Xərc anında)</label> 
-                            <select class="form-select form-select-sm" name="assistant_id">
-                                <option value="">Bütün Köməkçilər</option>
-                                {% for assistant in assistants %}
-                                    <option value="{{ assistant.id }}" {% if selected_filters.assistant_id == assistant.id %}selected{% endif %}>
-                                        {{ assistant.name }}
-                                    </option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                        <div class="col-md-3 mb-3">
-                            <label class="form-label">Planlamaçıya görə (Xərc anında)</label> 
-                            <select class="form-select form-select-sm" name="planner_id">
-                                <option value="">Bütün Planlamaçılar</option>
-                                {% for planner in planners %}
-                                    <option value="{{ planner.id }}" {% if selected_filters.planner_id == planner.id %}selected{% endif %}>
-                                        {{ planner.name }}
-                                    </option>
-                                {% endfor %}
-                            </select>
-                        </div>
 
-                        <div class="col-md-3 mb-3">
-                            <label class="form-label">Xərc Növünə görə</label>
+                        <!-- Xərc Növü -->
+                        <div class="col-md-2 mb-3">
+                            <label class="form-label">Xərc Növü</label>
                             <select class="form-select form-select-sm" name="expense_type">
                                 <option value="">Bütün Növlər</option>
                                 {% for type in expense_types %}
@@ -104,8 +86,8 @@
                             </select>
                         </div>
                         
-                        <!-- YENİ: Alt Növ Filtri (Dropdown) -->
-                        <div class="col-md-3 mb-3">
+                        <!-- Alt Növ -->
+                        <div class="col-md-2 mb-3">
                             <label class="form-label">Alt Növ (Detal)</label>
                             <select class="form-select form-select-sm" name="subtype_filter">
                                 <option value="">Bütün Alt Növlər</option>
@@ -122,69 +104,86 @@
                             </select>
                         </div>
 
-                        <div class="col-md-3 mb-3">
-                            <label class="form-label">Operatora görə</label>
-                            <select class="form-select form-select-sm" name="user_username">
-                                <option value="">Bütün Operatorlar</option>
-                                {% for op in operators %}
-                                    <option value="{{ op.username }}" {% if selected_filters.user_username == op.username %}selected{% endif %}>
-                                        {{ op.fullname }}
-                                    </option>
-                                {% endfor %}
-                            </select>
+                        <!-- TARİX FİLTRLƏRİ -->
+                        <div class="col-md-2 mb-3">
+                            <label class="form-label fw-bold">Başlanğıc Tarixi</label>
+                            <input type="date" class="form-control form-control-sm" name="start_date" value="{{ selected_filters.start_date }}">
                         </div>
-                        <div class="col-md-3 mb-3">
-                            <label class="form-label">Başlanğıc Tarixi</label>
-                            <input type="date" class="form-control form-control-sm" name="start_date" value="{{ selected_filters.start_date or '' }}">
+                        <div class="col-md-2 mb-3">
+                            <label class="form-label fw-bold">Bitmə Tarixi</label>
+                            <input type="date" class="form-control form-control-sm" name="end_date" value="{{ selected_filters.end_date }}">
                         </div>
-                        <div class="col-md-3 mb-3">
-                            <label class="form-label">Bitmə Tarixi</label>
-                            <input type="date" class="form-control form-control-sm" name="end_date" value="{{ selected_filters.end_date or '' }}">
-                        </div>
-                        <div class="col-md-12 mb-3 d-flex justify-content-end gap-2"> <a href="{{ url_for('admin_reports') }}" class="btn btn-sm btn-secondary"><i class="fas fa-times"></i> Təmizlə</a>
-                            <button type="submit" class="btn btn-sm btn-primary"><i class="fas fa-search"></i> Axtar</button>
+
+                        <!-- Düymələr -->
+                        <div class="col-md-12 mb-3 d-flex justify-content-end gap-2"> 
+                            <a href="{{ url_for('admin_reports') }}" class="btn btn-sm btn-secondary">
+                                <i class="fas fa-times"></i> Filtrləri Təmizlə (Son 10 gün)
+                            </a>
+                            <button type="submit" class="btn btn-sm btn-primary">
+                                <i class="fas fa-search"></i> Axtar
+                            </button>
                         </div>
                     </div>
                 </form>
             </div>
         </div>
+
         <h2 class="mt-5">Nəticələr ({{ reports|length }} qeyd tapıldı)</h2>
+        
         <div class="table-responsive">
             <table class="table table-striped table-bordered table-hover table-sm"> 
                 <thead class="bg-dark text-white">
                     <tr>
                         <th>Tarix / Saat</th>
-                        <th>Operator</th> <th>Avtomobil</th>
+                        <th>Operator</th> 
+                        <th>Avtomobil</th>
                         <th>Sürücü (Xərc anında)</th>      
                         <th>Köməkçi (Xərc anında)</th>    
                         <th>Planlamaçı (Xərc anında)</th> 
                         <th>Növ</th>
-                        <!-- YENİ SÜTUN -->
                         <th>Alt Növ (Detal)</th>
                         <th class="text-end">Məbləğ (AZN)</th>
                         <th class="text-end">Litr</th>
                         <th>Açıqlama</th>
-                        <th class="text-center">Sil</th> </tr>
+                        <th class="text-center">Sil</th> 
+                    </tr>
                 </thead>
                 <tbody>
                     {% if not reports %}
                     <tr>
-                        <td colspan="12" class="text-center text-muted">Axtarışa uyğun nəticə tapılmadı.</td> 
+                        <td colspan="12" class="text-center text-muted py-4">
+                            Axtarışa uyğun nəticə tapılmadı.<br>
+                            <small>(Qeyd: Tarix aralığını yoxlayın)</small>
+                        </td> 
                     </tr>
                     {% endif %}
                     
                     {% for item in reports %}
                     <tr>
-                        <td>{{ item.expense.timestamp.strftime('%d.%m.%Y %H:%M') }}</td>
+                        <!-- Tarix -->
+                        <td>
+                            {% if item.timestamp_str %}
+                                {{ item.timestamp_str }}
+                            {% else %}
+                                {{ item.timestamp.strftime('%d.%m.%Y %H:%M') }}
+                            {% endif %}
+                        </td>
+                        
+                        <!-- Operator -->
                         <td>{{ item.user.fullname if item.user else item.expense.entered_by }}</td>
+                        
+                        <!-- Avtomobil -->
                         <td>
                             {% if item.car %}<span class="badge bg-dark">{{ item.car.car_number }}</span>
                             {% else %}<span class="badge bg-secondary">Bilinmir</span>{% endif %}
                         </td>
+                        
+                        <!-- Personal -->
                         <td>{{ item.driver_name_at_expense }}</td>      
                         <td>{{ item.assistant_name_at_expense }}</td>    
                         <td>{{ item.planner_name_at_expense }}</td>    
                         
+                        <!-- Növ -->
                         <td>
                             {% if item.expense.type == 'Yanacaq' %}<span class="badge bg-success">Yanacaq</span>
                             {% elif item.expense.type == 'Təmir' %}<span class="badge bg-warning text-dark">Təmir</span>
@@ -194,19 +193,23 @@
                             {% else %}<span class="badge bg-secondary">{{ item.expense.type }}</span>{% endif %}
                         </td>
                         
-                        <!-- YENİ: Alt Növü Göstər -->
+                        <!-- Alt Növ -->
                         <td>
-                            {% if item.expense.subtype and item.expense.subtype != '-' %}
-                                <span class="badge bg-light text-dark border">{{ item.expense.subtype }}</span>
+                            {% if item.subtype and item.subtype != '-' %}
+                                <span class="badge bg-light text-dark border">{{ item.subtype }}</span>
                             {% else %}
                                 <span class="text-muted">-</span>
                             {% endif %}
                         </td>
 
+                        <!-- Məbləğ -->
                         <td class="text-end text-danger fw-bold">{{ "%.2f"|format(item.expense.amount) }}</td>
                         <td class="text-end">{{ item.expense.litr if item.expense.litr > 0 else '-' }}</td>
-                        <!-- YENİ: Təmiz açıqlamanı göstər -->
-                        <td>{{ item.expense.clean_description }}</td>
+                        
+                        <!-- Açıqlama -->
+                        <td>{{ item.clean_description }}</td>
+                        
+                        <!-- Sil -->
                         <td class="text-center">
                             <form method="POST" action="{{ url_for('delete_expense', id=item.expense.expense_id) }}" onsubmit="return confirm('Bu xərci silmək istədiyinizə əminsiniz?');">
                                 <button type="submit" class="btn btn-sm btn-outline-danger" title="Sil">
@@ -219,9 +222,9 @@
                 </tbody>
                 <tfoot>
                     <tr class="bg-light fw-bold">
-                        <td colspan="9" class="text-end">Yekun Cəm:</td> 
+                        <td colspan="8" class="text-end">Yekun Cəm:</td> 
                         <td class="text-end text-danger fs-5">{{ "%.2f"|format(total_amount) }} AZN</td>
-                        <td colspan="2"></td> 
+                        <td colspan="3"></td> 
                     </tr>
                 </tfoot>
             </table>

@@ -172,7 +172,6 @@ def get_all_cars(only_active=False):
         with conn.cursor() as cursor:
             # is_deleted yoxdursa xəta verməsin deyə sadə select
             sql = "SELECT * FROM cars WHERE 1=1"
-            # Əgər columns varsa check edə bilərik, amma sadəlik üçün:
             try:
                 sql += " AND (is_deleted = 0)"
             except: pass
@@ -390,19 +389,22 @@ def update_car_meta():
     finally: conn.close()
     return redirect(url_for('index'))
 
-# --- XƏTANIN QARŞISINI ALAN ADMIN REPORTS ---
+# --- ADMIN REPORTS ---
 @app.route('/admin/reports')
 def admin_reports():
     if session.get('role') not in ['admin', 'supervisor']: return redirect(url_for('index'))
     
-    # DEBUG REJİMİ: Xəta olarsa ekrana çıxarsın
     try:
         f_car = request.args.get('car_id'); f_dr = request.args.get('driver_id'); f_t = request.args.get('expense_type'); f_sub = request.args.get('subtype_filter')
-        sd = request.args.get('start_date') or (datetime.now() - timedelta(days=7)).strftime('%Y-%m-%d')
+        
+        today_str = datetime.now().strftime('%Y-%m-%d')
+        ten_days_ago_str = (datetime.now() - timedelta(days=10)).strftime('%Y-%m-%d')
+        
+        sd = request.args.get('start_date')
         ed = request.args.get('end_date')
         
-        # XƏTA HƏLLİ: COLLATION PROBLEMİNİ HƏLL ETMƏK ÜÇÜN COLLATE ƏLAVƏ EDİLİR
-        # "LEFT JOIN users u ON e.entered_by = u.username COLLATE utf8mb4_unicode_ci"
+        if not sd and not ed:
+            sd = ten_days_ago_str
         
         sql = """SELECT e.*, e.created_at as timestamp, e.id as expense_id, c.car_number, c.model, u.fullname as user_fullname,
                  d.name as driver_name_at_expense, a.name as assistant_name_at_expense, p.name as planner_name_at_expense
@@ -418,8 +420,14 @@ def admin_reports():
         if f_dr: sql += " AND e.driver_id_at_expense=%s"; p.append(f_dr)
         if f_t: sql += " AND e.type=%s"; p.append(f_t)
         if f_sub: sql += " AND e.description LIKE %s"; p.append(f"%[{f_sub}]%")
-        if sd: sql += " AND DATE(e.created_at) >= %s"; p.append(sd)
-        if ed: sql += " AND DATE(e.created_at) <= %s"; p.append(ed)
+        
+        if sd: 
+            sql += " AND DATE(e.created_at) >= %s"
+            p.append(sd)
+        if ed: 
+            sql += " AND DATE(e.created_at) <= %s"
+            p.append(ed)
+            
         sql += " ORDER BY e.created_at DESC"
 
         conn = get_connection_safe()
@@ -430,14 +438,12 @@ def admin_reports():
                 
                 fmt_reports = []
                 for r in reports:
-                    # FIX: Timestamp NONE olarsa indiki vaxt qoyuruq
                     if not r.get('created_at'):
                         r['timestamp'] = datetime.now()
                     else:
                         r['timestamp'] = r['created_at']
                     
                     sub, clean = parse_expense_description(r.get('description', ''))
-                    r['subtype'] = sub; r['clean_description'] = clean
                     
                     item = {
                         'expense': r,
@@ -445,7 +451,10 @@ def admin_reports():
                         'user': {'fullname': r['user_fullname']},
                         'driver_name_at_expense': r['driver_name_at_expense'] or "-",
                         'assistant_name_at_expense': r['assistant_name_at_expense'] or "-",
-                        'planner_name_at_expense': r['planner_name_at_expense'] or "-"
+                        'planner_name_at_expense': r['planner_name_at_expense'] or "-",
+                        'timestamp': r['timestamp'],
+                        'subtype': sub,
+                        'clean_description': clean
                     }
                     fmt_reports.append(item)
                 
@@ -459,9 +468,11 @@ def admin_reports():
                 
         finally: conn.close()
         
-        return render_template('admin_reports.html', reports=fmt_reports, total_amount=total, cars=cars, drivers=drivers, assistants=assts, planners=plans, operators=ops, expense_types=EXPENSE_TYPES, fine_types=FINE_TYPES, repair_types=REPAIR_TYPES, selected_filters=request.args)
+        current_filters = request.args.copy()
+        if not request.args.get('start_date'): current_filters['start_date'] = sd
+        
+        return render_template('admin_reports.html', reports=fmt_reports, total_amount=total, cars=cars, drivers=drivers, assistants=assts, planners=plans, operators=ops, expense_types=EXPENSE_TYPES, fine_types=FINE_TYPES, repair_types=REPAIR_TYPES, selected_filters=current_filters)
     except Exception:
-        # Xətanı brauzerə çıxarır
         return f"<h1>SİSTEM XƏTASI (DEBUG)</h1><pre>{traceback.format_exc()}</pre>"
 
 @app.route('/admin/expense/delete/<int:id>', methods=['POST'])
@@ -475,14 +486,16 @@ def delete_expense(id):
     finally: conn.close()
     return redirect(url_for('admin_reports'))
 
+# --- DELETED REPORTS (FIXED) ---
 @app.route('/admin/deleted_reports')
 @admin_required
 def admin_deleted_reports():
     conn = get_connection_safe()
     try:
         with conn.cursor() as c:
-            # Burda da COLLATE əlavə edirik
-            c.execute("""SELECT e.*, c.car_number, u.fullname as user_fullname, d.name as driver_name_at_expense, a.name as assistant_name_at_expense, p.name as planner_name_at_expense
+            # FIX: Added e.id as expense_id, COLLATES, and full JOINs
+            c.execute("""SELECT e.*, e.id as expense_id, e.created_at as timestamp, c.car_number, c.model, u.fullname as user_fullname, 
+                         d.name as driver_name_at_expense, a.name as assistant_name_at_expense, p.name as planner_name_at_expense
                          FROM expenses e 
                          LEFT JOIN cars c ON e.car_id=c.id 
                          LEFT JOIN users u ON e.entered_by=u.username COLLATE utf8mb4_unicode_ci
@@ -493,9 +506,25 @@ def admin_deleted_reports():
             rows = c.fetchall()
             rep = []
             for r in rows:
-                r['timestamp'] = r['created_at']
-                rep.append({'expense': r, 'car': {'car_number': r['car_number']}, 'user': {'fullname': r['user_fullname']}, 
-                            'driver_name_at_expense': r['driver_name_at_expense'], 'assistant_name_at_expense': r['assistant_name_at_expense'], 'planner_name_at_expense': r['planner_name_at_expense']})
+                if not r.get('created_at'):
+                    r['timestamp'] = datetime.now()
+                else:
+                    r['timestamp'] = r['created_at']
+                
+                sub, clean = parse_expense_description(r.get('description', ''))
+                
+                item = {
+                    'expense': r, 
+                    'car': {'car_number': r['car_number'], 'model': r.get('model')} if r.get('car_number') else None, 
+                    'user': {'fullname': r['user_fullname']}, 
+                    'driver_name_at_expense': r['driver_name_at_expense'] or "-", 
+                    'assistant_name_at_expense': r['assistant_name_at_expense'] or "-", 
+                    'planner_name_at_expense': r['planner_name_at_expense'] or "-",
+                    'timestamp': r['timestamp'],
+                    'subtype': sub,
+                    'clean_description': clean
+                }
+                rep.append(item)
     finally: conn.close()
     return render_template('admin_deleted_reports.html', reports=rep)
 
