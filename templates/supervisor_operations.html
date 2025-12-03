@@ -99,7 +99,9 @@
                         </td>
                         <td class="text-center">
                             {% if user.username == session.user %}
-                                <span class="text-muted">Cari hesab</span>
+                                <a href="{{ url_for('supervisor_edit_user', id=user.id) }}" class="btn btn-sm btn-warning me-1" title="Parolu və məlumatları yenilə">
+                                    <i class="fas fa-key"></i> Redaktə (Siz)
+                                </a>
                             {% else %}
                                 <a href="{{ url_for('supervisor_edit_user', id=user.id) }}" class="btn btn-sm btn-warning me-1">
                                     <i class="fas fa-edit"></i> Redaktə / Aktivlik
