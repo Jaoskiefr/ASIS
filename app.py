@@ -616,9 +616,28 @@ def import_db():
 @supervisor_required
 def supervisor_operations(): return render_template('supervisor_operations.html', users=get_all_users())
 
+# --- SUPERVISOR ADD/DELETE USER FIX ---
 @app.route('/supervisor/operations/add_user', methods=['POST'])
 @supervisor_required
-def supervisor_add_user(): return add_user()
+def supervisor_add_user():
+    conn = get_connection_safe()
+    try:
+        fullname = request.form['fullname']
+        username = request.form['username']
+        password = request.form['password']
+        role = request.form['role']
+        
+        with conn.cursor() as c:
+            c.execute("INSERT INTO users (fullname, username, password, role, is_active) VALUES (%s, %s, %s, %s, 1)", 
+                      (fullname, username, password, role))
+        conn.commit()
+        log_action('ADD_USER_SUPERVISOR', f"Supervisor added user: {username} ({role})")
+        flash('Yeni istifadəçi uğurla əlavə edildi.', 'success')
+    except Exception as e:
+        flash(f'Xəta: {e}', 'danger')
+    finally:
+        conn.close()
+    return redirect(url_for('supervisor_operations'))
 
 @app.route('/supervisor/user/edit/<int:id>', methods=['GET', 'POST'])
 @supervisor_required
@@ -636,7 +655,19 @@ def supervisor_edit_user(id):
 
 @app.route('/supervisor/user/delete/<int:id>', methods=['POST'])
 @supervisor_required
-def supervisor_delete_user(id): return delete_user(id)
+def supervisor_delete_user(id):
+    conn = get_connection_safe()
+    try:
+        with conn.cursor() as c:
+            c.execute("DELETE FROM users WHERE id=%s", (id,))
+        conn.commit()
+        log_action('DELETE_USER_SUPERVISOR', f"Supervisor deleted user ID: {id}")
+        flash('İstifadəçi silindi.', 'success')
+    except Exception as e:
+        flash(f'Xəta: {e}', 'danger')
+    finally:
+        conn.close()
+    return redirect(url_for('supervisor_operations'))
 
 # --- STANDARD CRUD ---
 @app.route('/admin/drivers')
