@@ -2,7 +2,7 @@
 <html lang="az">
 <head>
     <meta charset="UTF-8">
-    <title>ASİS - Interaktiv Pivot Hesabat</title>
+    <title>ASİS - Xərc Hesabatları</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/pivottable/2.23.0/pivot.min.css">
@@ -15,59 +15,101 @@
         .content-container {
             background-color: rgba(255, 255, 255, 0.98); border-radius: 12px; padding: 25px; margin-top: 20px; box-shadow: 0 8px 30px rgba(0,0,0,0.2);
         }
-        /* Pivot Table-ın Excel stilində görünməsi üçün */
-        .pvtTable { font-family: sans-serif; border-collapse: collapse; width: 100%; }
-        .pvtTable tr th, .pvtTable tr td { border: 1px solid #ddd; padding: 8px; font-size: 13px; }
-        .pvtAxisContainer, .pvtVals { background: #f8f9fa !important; border: 1px solid #dee2e6 !important; }
+        .table th, .table td { font-size: 0.85rem; vertical-align: middle; }
+        .pvtTable { width: 100%; border-collapse: collapse; }
         .pvtAttr { background: #0d6efd !important; color: white !important; border-radius: 4px !important; padding: 2px 8px !important; }
-        .pvtTotal, .pvtGrandTotal { font-weight: bold; background-color: #eee; }
     </style>
 </head>
 <body>
     {% if session['role'] == 'supervisor' %}
         {% include 'supervisor_navbar.html' %}
     {% else %}
-        {% include 'admin_navbar.html' %}
+        {% include 'admin_navbar.html' %} 
     {% endif %}
 
     <div class="container-fluid px-4">
         
+        <div class="content-container mt-4">
+            <h4 class="text-primary mb-3"><i class="fas fa-th me-2"></i> Excel Tipli Pivot Analiz</h4>
+            <p class="text-muted small">* Sahələri sürükləyərək cədvəli qura bilərsiniz (Məs: Maşını "Rows" hissəsinə atın).</p>
+            <div id="pivotOutput" style="overflow-x: auto;"></div>
+        </div>
+
         <div class="content-container">
-            <h4 class="mb-4 text-primary"><i class="fas fa-th me-2"></i> Excel Tipli Pivot Analiz (Sürüklə-Burax)</h4>
-            <p class="text-muted small">* Sol tərəfdəki sahələri (Maşın, Xərc Növü və s.) sətir və ya sütunlara sürükləyərək hesabatı dərhal qura bilərsiniz.</p>
-            
-            <div id="output" style="margin: 30px auto; overflow-x: auto;">
+            <h5 class="mb-3"><i class="fas fa-filter me-2"></i> Filtrlər</h5>
+            <form method="GET" action="{{ url_for('admin_reports') }}" class="row g-2">
+                <div class="col-md-2">
+                    <label class="form-label small">Başlanğıc</label>
+                    <input type="date" class="form-control form-control-sm" name="start_date" value="{{ selected_filters.start_date }}">
                 </div>
+                <div class="col-md-2">
+                    <label class="form-label small">Bitmə</label>
+                    <input type="date" class="form-control form-control-sm" name="end_date" value="{{ selected_filters.end_date }}">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small">Avtomobil</label>
+                    <select class="form-select form-select-sm" name="car_id">
+                        <option value="">Bütün</option>
+                        {% for car in cars %}
+                        <option value="{{ car.id }}" {% if selected_filters.car_id|string == car.id|string %}selected{% endif %}>{{ car.car_number }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2 d-flex align-items-end gap-1">
+                    <button type="submit" class="btn btn-sm btn-primary w-100">Axtar</button>
+                    <a href="{{ url_for('admin_reports') }}" class="btn btn-sm btn-secondary">Sıfırla</a>
+                </div>
+            </form>
         </div>
 
         <div class="content-container mb-5">
             <h4 class="text-dark mb-3"><i class="fas fa-list me-2"></i> Bütün Xərc Detalları</h4>
             <div class="table-responsive">
-                <table class="table table-striped table-hover border">
+                <table class="table table-striped table-bordered table-hover">
                     <thead class="table-dark">
                         <tr>
                             <th>Tarix</th>
                             <th>Maşın</th>
                             <th>Xərc Növü</th>
                             <th>Alt Növ</th>
-                            <th class="text-end">Məbləğ</th>
+                            <th class="text-end">Məbləğ (AZN)</th>
                             <th class="text-end">Litr</th>
+                            <th>Sürücü</th>
                             <th>Açıqlama</th>
+                            <th class="text-center">Sil</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for item in reports %}
                         <tr>
-                            <td>{{ item.expense.date.strftime('%d.%m.%Y') if item.expense.date else '-' }}</td>
-                            <td class="fw-bold">{{ item.car_plate }}</td>
-                            <td>{{ item.category_name }}</td>
-                            <td>{{ item.subcategory_name }}</td>
-                            <td class="text-end fw-bold">{{ "%.2f"|format(item.expense.amount) }}</td>
-                            <td class="text-end">{{ item.expense.litr if item.expense.litr and item.expense.litr > 0 else 0 }}</td>
+                            <td>{{ item.timestamp.strftime('%d.%m.%Y') if item.timestamp else '-' }}</td>
+                            <td class="fw-bold text-primary">{% if item.car %}{{ item.car.car_number }}{% else %}-{% endif %}</td>
+                            <td>
+                                {% if item.expense.type == 'Yanacaq' %}<span class="badge bg-success">Yanacaq</span>
+                                {% elif item.expense.type == 'Təmir' %}<span class="badge bg-warning text-dark">Təmir</span>
+                                {% elif item.expense.type == 'Cərimə' %}<span class="badge bg-danger">Cərimə</span>
+                                {% else %}<span class="badge bg-secondary">{{ item.expense.type }}</span>{% endif %}
+                            </td>
+                            <td>{{ item.subtype or '-' }}</td>
+                            <td class="text-end fw-bold text-danger">{{ "%.2f"|format(item.expense.amount) }}</td>
+                            <td class="text-end">{{ item.expense.litr if item.expense.litr > 0 else '0' }}</td>
+                            <td>{{ item.driver_name_at_expense }}</td>
                             <td><small>{{ item.clean_description }}</small></td>
+                            <td class="text-center">
+                                <form method="POST" action="{{ url_for('delete_expense', id=item.expense.expense_id) }}" onsubmit="return confirm('Silinsin?');">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger"><i class="fas fa-trash"></i></button>
+                                </form>
+                            </td>
                         </tr>
                         {% endfor %}
                     </tbody>
+                    <tfoot class="table-light fw-bold">
+                        <tr>
+                            <td colspan="4" class="text-end">Ümumi Yekun:</td>
+                            <td class="text-end text-danger">{{ "%.2f"|format(total_amount) }} AZN</td>
+                            <td colspan="4"></td>
+                        </tr>
+                    </tfoot>
                 </table>
             </div>
         </div>
@@ -79,30 +121,27 @@
 
     <script>
         $(function(){
-            // Flask-dan gələn datanı JS formatına çeviririk
-            var reportsData = [
+            // Məlumatları Pivot üçün JS-ə ötürürük (Sənin Python item strukturuna uyğun)
+            var pivotData = [
                 {% for item in reports %}
                 {
-                    "Maşın": "{{ item.car_plate }}",
-                    "Xərc Növü": "{{ item.category_name }}",
-                    "Alt Növ": "{{ item.subcategory_name }}",
-                    "Sürücü": "{{ item.driver_name }}",
-                    "Ödəmə": "{{ item.payment_name }}",
-                    "Tarix": "{{ item.expense.date.strftime('%d.%m.%Y') if item.expense.date else '' }}",
-                    "Məbləğ (AZN)": {{ item.expense.amount | float }},
+                    "Maşın": "{{ item.car.car_number if item.car else '-' }}",
+                    "Xərc Növü": "{{ item.expense.type }}",
+                    "Alt Növ": "{{ item.subtype or '-' }}",
+                    "Sürücü": "{{ item.driver_name_at_expense }}",
+                    "Tarix": "{{ item.timestamp.strftime('%d.%m.%Y') if item.timestamp else '' }}",
+                    "Məbləğ": {{ item.expense.amount | float }},
                     "Litr": {{ item.expense.litr | float if item.expense.litr else 0 }}
                 }{% if not loop.last %},{% endif %}
                 {% endfor %}
             ];
 
-            // Pivot Table-ı Başlat
-            $("#output").pivotUI(reportsData, {
-                rows: ["Maşın"], // Varsayılan olaraq maşınları sətirə qoyur
-                cols: ["Xərc Növü"], // Varsayılan olaraq xərc növlərini sütuna qoyur
-                vals: ["Məbləğ (AZN)"],
-                aggregatorName: "Sum", // Cəmləmə funksiyası
-                rendererName: "Table",
-                renderers: $.extend($.pivotUtilities.renderers)
+            $("#pivotOutput").pivotUI(pivotData, {
+                rows: ["Maşın"],
+                cols: ["Xərc Növü"],
+                vals: ["Məbləğ"],
+                aggregatorName: "Sum",
+                rendererName: "Table"
             });
         });
     </script>
