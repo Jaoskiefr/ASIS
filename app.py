@@ -388,7 +388,67 @@ def update_car_meta():
         conn.commit(); log_action('UPDATE_CAR', f"Car {request.form.get('car_id')} updated"); flash('Yeniləndi', 'success')
     finally: conn.close()
     return redirect(url_for('index'))
+@app.route('/pivot_reports')
+def pivot_reports():
+    if 'user' not in session or session.get('role') not in ['admin', 'supervisor']:
+        return redirect(url_for('login'))
+    
+    sd = request.args.get('start_date')
+    ed = request.args.get('end_date')
+    
+    # Bazadan məlumatları çəkmək üçün SQL sorğusu
+    sql = """SELECT e.*, e.created_at as timestamp, e.id as expense_id, c.car_number, c.model, u.fullname as user_fullname,
+             d.name as driver_name_at_expense, a.name as assistant_name_at_expense, p.name as planner_name_at_expense
+             FROM expenses e
+             LEFT JOIN cars c ON e.car_id = c.id
+             LEFT JOIN users u ON e.entered_by = u.username COLLATE utf8mb4_unicode_ci
+             LEFT JOIN drivers d ON e.driver_id_at_expense = d.id
+             LEFT JOIN assistants a ON e.assistant_id_at_expense = a.id
+             LEFT JOIN planners p ON e.planner_id_at_expense = p.id
+             WHERE e.is_deleted = 0"""
+    p = []
+    
+    if sd: 
+        sql += " AND DATE(e.created_at) >= %s"
+        p.append(sd)
+    if ed: 
+        sql += " AND DATE(e.created_at) <= %s"
+        p.append(ed)
+        
+    sql += " ORDER BY e.created_at DESC"
 
+    conn = get_connection_safe()
+    fmt_reports = []
+    try:
+        with conn.cursor() as c:
+            c.execute(sql, tuple(p))
+            reports = c.fetchall()
+            
+            for r in reports:
+                if not r.get('created_at'):
+                    r['timestamp'] = datetime.now()
+                else:
+                    r['timestamp'] = r['created_at']
+                
+                sub, clean = parse_expense_description(r.get('description', ''))
+                
+                item = {
+                    'expense': r,
+                    'car': {'car_number': r['car_number'], 'model': r['model']} if r.get('car_number') else None,
+                    'user': {'fullname': r['user_fullname']},
+                    'username': r['user_fullname'] or r['entered_by'],
+                    'driver_name_at_expense': r['driver_name_at_expense'] or "-",
+                    'assistant_name_at_expense': r['assistant_name_at_expense'] or "-",
+                    'planner_name_at_expense': r['planner_name_at_expense'] or "-",
+                    'timestamp': r['timestamp'],
+                    'subtype': sub,
+                    'clean_description': clean
+                }
+                fmt_reports.append(item)
+    finally: 
+        conn.close()
+        
+    return render_template('pivot_reports.html', reports=fmt_reports)
 # --- ADMIN REPORTS ---
 @app.route('/admin/reports')
 def admin_reports():

@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="az">
+<head>
+    <meta charset="UTF-8">
+    <title>ASİS - Pivot Analitika</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/pivottable/2.23.0/pivot.min.css">
+    <style>
+        body {
+            background-image: url("{{ url_for('static', filename='bg.jpg') }}");
+            background-size: cover; background-position: center; background-attachment: fixed; min-height: 100vh;
+        }
+        .content-container {
+            background-color: rgba(255, 255, 255, 0.95); border-radius: 8px; padding: 25px; margin-top: 20px; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
+        }
+        /* Pivot UI Customization */
+        .pvtUi { width: 100%; font-size: 0.9rem; }
+        .pvtAxisContainer, .pvtVals { background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 6px; padding: 10px; }
+        .pvtTable { margin-top: 15px; width: 100%; }
+        select.pvtAttrDropdown { padding: 4px 8px; border-radius: 4px; border: 1px solid #ced4da; }
+        .pvtTotal, .pvtGrandTotal { font-weight: bold; background-color: #e9ecef !important; color: #dc3545; }
+        
+        /* Cəlbedici Yüklənmə Ekranı */
+        .loading-overlay { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px; }
+        .spinner-grow { width: 3rem; height: 3rem; }
+    </style>
+</head>
+<body>
+    {% if session['role'] == 'supervisor' %}
+        {% include 'supervisor_navbar.html' %}
+    {% else %}
+        {% include 'admin_navbar.html' %}
+    {% endif %}
+
+    <div class="container-fluid mt-4">
+        <div class="content-container">
+            <h4 class="mb-4 text-primary fw-bold"><i class="fas fa-layer-group me-2"></i> Dinamik Xərc Analitikası</h4>
+            
+            <form method="GET" action="{{ url_for('pivot_reports') }}" class="row g-3 mb-4 align-items-end bg-light p-3 rounded border">
+                <div class="col-md-3">
+                    <label class="form-label fw-bold text-secondary">Başlanğıc Tarix</label>
+                    <input type="date" name="start_date" class="form-control shadow-sm" value="{{ request.args.get('start_date', '') }}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label fw-bold text-secondary">Bitiş Tarix</label>
+                    <input type="date" name="end_date" class="form-control shadow-sm" value="{{ request.args.get('end_date', '') }}">
+                </div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-primary w-100 shadow-sm"><i class="fas fa-filter me-2"></i>Tətbiq et</button>
+                </div>
+            </form>
+            
+            <div id="pivot_table_container" class="overflow-auto border rounded p-2 bg-white min-vh-50">
+                <div class="loading-overlay" id="loading-spinner">
+                    <div class="spinner-grow text-primary mb-3" role="status">
+                        <span class="visually-hidden">Yüklənir...</span>
+                    </div>
+                    <h5 class="text-secondary fw-bold">Məlumatlar qruplaşdırılır...</h5>
+                    <p class="text-muted small">Bu proses saniyələr çəkə bilər</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://code.jquery.com/ui/1.12.1/jquery-ui.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pivottable/2.23.0/pivot.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+    $(document).ready(function() {
+        // Flask-dan gələn datanı JS üçün hazırlayırıq
+        var reportData = [
+            {% for item in reports %}
+            {
+                "Tarix": "{{ item.timestamp.strftime('%d.%m.%Y') if item.timestamp else '' }}",
+                "İstifadəçi": "{{ item.username }}",
+                "Maşın": "{{ item.car_number | default('Bilinmir') }}",
+                "Xərc Təyinatı": "{{ item.clean_description | default('Digər') }}",
+                "Məbləğ (AZN)": {{ item.expense.amount | default(0) }},
+                "Litr": {{ item.expense.litr | default(0) }}
+            }{% if not loop.last %},{% endif %}
+            {% endfor %}
+        ];
+
+        // Məlumat işləndikdən sonra yüklənmə animasiyasını gizlədirik
+        setTimeout(function() {
+            $("#loading-spinner").hide();
+
+            if (reportData.length > 0) {
+                $("#pivot_table_container").pivotUI(
+                    reportData,
+                    {
+                        rows: ["Maşın"],
+                        cols: ["Xərc Təyinatı"],
+                        vals: ["Məbləğ (AZN)"],
+                        aggregatorName: "Sum",
+                        rendererName: "Table",
+                        onRefresh: function() {
+                            // Pivot cədvələ Bootstrap dizaynı veririk
+                            $('.pvtTable').addClass('table table-bordered table-hover table-sm text-center shadow-sm');
+                        }
+                    }
+                );
+            } else {
+                $("#pivot_table_container").html("<div class='alert alert-info m-3'><i class='fas fa-info-circle me-2'></i> Seçilmiş tarix aralığına uyğun məlumat tapılmadı.</div>");
+            }
+        }, 800); // Kiçik gecikmə (animasiyanın görünməsi üçün)
+    });
+    </script>
+</body>
+</html>
