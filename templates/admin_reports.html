@@ -2,19 +2,25 @@
 <html lang="az">
 <head>
     <meta charset="UTF-8">
-    <title>ASİS - Xərc Hesabatları</title>
+    <title>ASİS - Interaktiv Pivot Hesabat</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/pivottable/2.23.0/pivot.min.css">
+    
     <style>
         body {
             background-image: url("{{ url_for('static', filename='bg.jpg') }}");
             background-size: cover; background-position: center; background-attachment: fixed; min-height: 100vh;
         }
         .content-container {
-            background-color: rgba(255, 255, 255, 0.95); border-radius: 8px; padding: 20px; margin-top: 20px; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
+            background-color: rgba(255, 255, 255, 0.98); border-radius: 12px; padding: 25px; margin-top: 20px; box-shadow: 0 8px 30px rgba(0,0,0,0.2);
         }
-        .table th, .table td { font-size: 0.85rem; }
-        .pivot-header { background-color: #f8f9fa; border-left: 5px solid #0d6efd; padding: 10px 15px; margin-bottom: 15px; border-radius: 4px; }
+        /* Pivot Table-ın Excel stilində görünməsi üçün */
+        .pvtTable { font-family: sans-serif; border-collapse: collapse; width: 100%; }
+        .pvtTable tr th, .pvtTable tr td { border: 1px solid #ddd; padding: 8px; font-size: 13px; }
+        .pvtAxisContainer, .pvtVals { background: #f8f9fa !important; border: 1px solid #dee2e6 !important; }
+        .pvtAttr { background: #0d6efd !important; color: white !important; border-radius: 4px !important; padding: 2px 8px !important; }
+        .pvtTotal, .pvtGrandTotal { font-weight: bold; background-color: #eee; }
     </style>
 </head>
 <body>
@@ -25,73 +31,40 @@
     {% endif %}
 
     <div class="container-fluid px-4">
+        
         <div class="content-container">
-            <div class="pivot-header">
-                <h5 class="mb-0 text-primary"><i class="fas fa-calculator me-2"></i> Maşınlar üzrə Pivot Xülasə</h5>
-            </div>
-            <div class="table-responsive">
-                <table class="table table-sm table-bordered align-middle">
-                    <thead class="table-dark text-center">
-                        <tr>
-                            <th>Avtomobil Nömrəsi</th>
-                            <th>Cəm Məbləğ (AZN)</th>
-                            <th>Cəm Litr</th>
-                            <th>Əməliyyat Sayı</th>
-                        </tr>
-                    </thead>
-                    <tbody id="pivotTableBody">
-                        </tbody>
-                    <tfoot class="table-light fw-bold">
-                        <tr id="pivotFooter">
-                            <td class="text-end">Səhifə üzrə Yekun:</td>
-                            <td class="text-end text-danger" id="grandTotalAmount">0.00 AZN</td>
-                            <td class="text-end text-primary" id="grandTotalLiters">0.00</td>
-                            <td class="text-center" id="grandTotalCount">0</td>
-                        </tr>
-                    </tfoot>
-                </table>
-            </div>
+            <h4 class="mb-4 text-primary"><i class="fas fa-th me-2"></i> Excel Tipli Pivot Analiz (Sürüklə-Burax)</h4>
+            <p class="text-muted small">* Sol tərəfdəki sahələri (Maşın, Xərc Növü və s.) sətir və ya sütunlara sürükləyərək hesabatı dərhal qura bilərsiniz.</p>
+            
+            <div id="output" style="margin: 30px auto; overflow-x: auto;">
+                </div>
         </div>
 
         <div class="content-container mb-5">
-            <div class="d-flex justify-content-between align-items-center mb-3">
-                <h4 class="text-dark mb-0"><i class="fas fa-list me-2"></i> Xərc Detalları</h4>
-                <input type="text" id="tableSearch" class="form-control w-25" placeholder="Cədvəldə axtar...">
-            </div>
-            
+            <h4 class="text-dark mb-3"><i class="fas fa-list me-2"></i> Bütün Xərc Detalları</h4>
             <div class="table-responsive">
-                <table id="expenseTable" class="table table-striped table-hover border">
+                <table class="table table-striped table-hover border">
                     <thead class="table-dark">
                         <tr>
                             <th>Tarix</th>
                             <th>Maşın</th>
-                            <th>Sürücü</th>
                             <th>Xərc Növü</th>
                             <th>Alt Növ</th>
-                            <th>Ödəmə</th>
                             <th class="text-end">Məbləğ</th>
                             <th class="text-end">Litr</th>
                             <th>Açıqlama</th>
-                            <th class="text-center">Sil</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for item in reports %}
                         <tr>
                             <td>{{ item.expense.date.strftime('%d.%m.%Y') if item.expense.date else '-' }}</td>
-                            <td class="fw-bold car-plate">{{ item.car_plate }}</td>
-                            <td>{{ item.driver_name }}</td>
+                            <td class="fw-bold">{{ item.car_plate }}</td>
                             <td>{{ item.category_name }}</td>
                             <td>{{ item.subcategory_name }}</td>
-                            <td>{{ item.payment_name }}</td>
-                            <td class="text-end fw-bold amount-cell">{{ "%.2f"|format(item.expense.amount) }}</td>
-                            <td class="text-end liter-cell">{{ item.expense.litr if item.expense.litr and item.expense.litr > 0 else 0 }}</td>
+                            <td class="text-end fw-bold">{{ "%.2f"|format(item.expense.amount) }}</td>
+                            <td class="text-end">{{ item.expense.litr if item.expense.litr and item.expense.litr > 0 else 0 }}</td>
                             <td><small>{{ item.clean_description }}</small></td>
-                            <td class="text-center">
-                                <form method="POST" action="{{ url_for('delete_expense', id=item.expense.expense_id) }}" onsubmit="return confirm('Silinsin?');">
-                                    <button type="submit" class="btn btn-sm btn-outline-danger"><i class="fas fa-trash"></i></button>
-                                </form>
-                            </td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -100,71 +73,38 @@
         </div>
     </div>
 
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://code.jquery.com/ui/1.13.2/jquery-ui.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pivottable/2.23.0/pivot.min.js"></script>
+
     <script>
-        function updatePivot() {
-            const rows = document.querySelectorAll("#expenseTable tbody tr");
-            let pivot = {};
-            let gAmount = 0;
-            let gLiters = 0;
-            let gCount = 0;
+        $(function(){
+            // Flask-dan gələn datanı JS formatına çeviririk
+            var reportsData = [
+                {% for item in reports %}
+                {
+                    "Maşın": "{{ item.car_plate }}",
+                    "Xərc Növü": "{{ item.category_name }}",
+                    "Alt Növ": "{{ item.subcategory_name }}",
+                    "Sürücü": "{{ item.driver_name }}",
+                    "Ödəmə": "{{ item.payment_name }}",
+                    "Tarix": "{{ item.expense.date.strftime('%d.%m.%Y') if item.expense.date else '' }}",
+                    "Məbləğ (AZN)": {{ item.expense.amount | float }},
+                    "Litr": {{ item.expense.litr | float if item.expense.litr else 0 }}
+                }{% if not loop.last %},{% endif %}
+                {% endfor %}
+            ];
 
-            rows.forEach(row => {
-                if (row.style.display !== 'none') {
-                    const plateCell = row.querySelector(".car-plate");
-                    const amountCell = row.querySelector(".amount-cell");
-                    const literCell = row.querySelector(".liter-cell");
-
-                    if (plateCell && amountCell) {
-                        const plate = plateCell.innerText.trim();
-                        const amount = parseFloat(amountCell.innerText.replace(',', '')) || 0;
-                        const liters = parseFloat(literCell.innerText.replace(',', '')) || 0;
-
-                        if (!pivot[plate]) {
-                            pivot[plate] = { amount: 0, liters: 0, count: 0 };
-                        }
-
-                        pivot[plate].amount += amount;
-                        pivot[plate].liters += liters;
-                        pivot[plate].count += 1;
-
-                        gAmount += amount;
-                        gLiters += liters;
-                        gCount += 1;
-                    }
-                }
+            // Pivot Table-ı Başlat
+            $("#output").pivotUI(reportsData, {
+                rows: ["Maşın"], // Varsayılan olaraq maşınları sətirə qoyur
+                cols: ["Xərc Növü"], // Varsayılan olaraq xərc növlərini sütuna qoyur
+                vals: ["Məbləğ (AZN)"],
+                aggregatorName: "Sum", // Cəmləmə funksiyası
+                rendererName: "Table",
+                renderers: $.extend($.pivotUtilities.renderers)
             });
-
-            const pivotBody = document.getElementById("pivotTableBody");
-            if (!pivotBody) return;
-            pivotBody.innerHTML = "";
-
-            Object.keys(pivot).sort().forEach(plate => {
-                const tr = document.createElement("tr");
-                tr.innerHTML = `
-                    <td class="fw-bold">${plate}</td>
-                    <td class="text-end">${pivot[plate].amount.toFixed(2)} AZN</td>
-                    <td class="text-end">${pivot[plate].liters.toFixed(2)}</td>
-                    <td class="text-center">${pivot[plate].count}</td>
-                `;
-                pivotBody.appendChild(tr);
-            });
-
-            document.getElementById("grandTotalAmount").innerText = gAmount.toFixed(2) + " AZN";
-            document.getElementById("grandTotalLiters").innerText = gLiters.toFixed(2);
-            document.getElementById("grandTotalCount").innerText = gCount;
-        }
-
-        document.getElementById("tableSearch").addEventListener("keyup", function() {
-            let value = this.value.toLowerCase();
-            let rows = document.querySelectorAll("#expenseTable tbody tr");
-            
-            rows.forEach(row => {
-                row.style.display = row.innerText.toLowerCase().indexOf(value) > -1 ? "" : "none";
-            });
-            updatePivot();
         });
-
-        window.onload = updatePivot;
     </script>
 </body>
 </html>
