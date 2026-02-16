@@ -8,7 +8,6 @@
     <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='icons/apple-touch-icon.png') }}">
     <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='icons/favicon-32x32.png') }}">
     <link rel="icon" type="image/png" sizes="16x16" href="{{ url_for('static', filename='icons/favicon-16x16.png') }}">
-    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
     <link rel="shortcut icon" href="{{ url_for('static', filename='icons/favicon.ico') }}">
     <meta name="theme-color" content="#0d6efd">
 
@@ -21,9 +20,11 @@
             background-size: cover; background-position: center; background-attachment: fixed; min-height: 100vh;
         }
         .content-container {
-            background-color: rgba(255, 255, 255, 0.98); border-radius: 12px; padding: 25px; margin-top: 20px; box-shadow: 0 8px 30px rgba(0,0,0,0.2);
+            background-color: rgba(255, 255, 255, 0.98); border-radius: 12px; padding: 25px; margin-top: 20px; box-shadow: 0 8px 30px rgba(0,0,0,0.15);
         }
-        .table th, .table td { font-size: 0.85rem; vertical-align: middle; }
+        .table th { background-color: #212529; color: white; font-weight: 500; }
+        .table td { vertical-align: middle; font-size: 0.9rem; }
+        .badge-custom { font-size: 0.85em; padding: 0.5em 0.7em; }
     </style>
 </head>
 <body>
@@ -35,78 +36,165 @@
 
     <div class="container-fluid px-4">
         
-        <div class="content-container mt-4">
-            <h5 class="mb-3"><i class="fas fa-filter me-2"></i> Filtrlər</h5>
-            <form method="GET" action="{{ url_for('admin_reports') }}" class="row g-2">
-                <div class="col-md-2">
-                    <label class="form-label small">Başlanğıc Tarixi</label>
-                    <input type="date" class="form-control form-control-sm" name="start_date" value="{{ selected_filters.start_date }}">
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label small">Bitmə Tarixi</label>
-                    <input type="date" class="form-control form-control-sm" name="end_date" value="{{ selected_filters.end_date }}">
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label small">Avtomobil</label>
-                    <select class="form-select form-select-sm" name="car_id">
-                        <option value="">Bütün</option>
+        <div class="d-flex justify-content-between align-items-center mt-4 mb-3">
+            <h2 class="text-primary fw-bold m-0"><i class="fas fa-chart-pie me-2"></i> Ümumi Xərc Hesabatları</h2>
+        </div>
+
+        <div class="content-container mt-2 mb-4 p-4">
+            <h5 class="text-dark border-bottom pb-2 mb-3"><i class="fas fa-filter me-2 text-primary"></i> Ətraflı Axtarış və Filtrləmə</h5>
+            <form method="GET" action="{{ url_for('admin_reports') }}" class="row g-3">
+                
+                <div class="col-md-3">
+                    <label class="form-label text-secondary fw-bold small mb-1">Avtomobil</label>
+                    <select class="form-select shadow-sm" name="car_id">
+                        <option value="">Bütün Avtomobillər</option>
                         {% for car in cars %}
-                        <option value="{{ car.id }}" {% if selected_filters.car_id|string == car.id|string %}selected{% endif %}>{{ car.car_number }}</option>
+                        <option value="{{ car.id }}" {% if selected_filters.car_id|string == car.id|string %}selected{% endif %}>
+                            {{ car.car_number }} ({{ car.model }})
+                        </option>
                         {% endfor %}
                     </select>
                 </div>
-                <div class="col-md-2 d-flex align-items-end gap-1">
-                    <button type="submit" class="btn btn-sm btn-primary w-100">Axtar</button>
-                    <a href="{{ url_for('admin_reports') }}" class="btn btn-sm btn-secondary">Sıfırla</a>
+
+                <div class="col-md-3">
+                    <label class="form-label text-secondary fw-bold small mb-1">Sürücü (Xərc Anında)</label>
+                    <select class="form-select shadow-sm" name="driver_id">
+                        <option value="">Bütün Sürücülər</option>
+                        {% for driver in drivers %}
+                        <option value="{{ driver.id }}" {% if selected_filters.driver_id|string == driver.id|string %}selected{% endif %}>
+                            {{ driver.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="col-md-3">
+                    <label class="form-label text-secondary fw-bold small mb-1">Xərc Növü</label>
+                    <select class="form-select shadow-sm" name="expense_type">
+                        <option value="">Bütün Növlər</option>
+                        {% for type in expense_types %}
+                        <option value="{{ type }}" {% if selected_filters.expense_type == type %}selected{% endif %}>
+                            {{ type }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="col-md-3">
+                    <label class="form-label text-secondary fw-bold small mb-1">Alt Növ (Detal)</label>
+                    <select class="form-select shadow-sm" name="subtype_filter">
+                        <option value="">Bütün Alt Növlər</option>
+                        <optgroup label="Cərimə Növləri">
+                            {% for ft in fine_types %}
+                                <option value="{{ ft }}" {% if selected_filters.subtype_filter == ft %}selected{% endif %}>{{ ft }}</option>
+                            {% endfor %}
+                        </optgroup>
+                        <optgroup label="Təmir Növləri">
+                            {% for rt in repair_types %}
+                                <option value="{{ rt }}" {% if selected_filters.subtype_filter == rt %}selected{% endif %}>{{ rt }}</option>
+                            {% endfor %}
+                        </optgroup>
+                    </select>
+                </div>
+
+                <div class="col-md-3">
+                    <label class="form-label text-secondary fw-bold small mb-1">Başlanğıc Tarixi</label>
+                    <input type="date" class="form-control shadow-sm" name="start_date" value="{{ selected_filters.start_date }}">
+                </div>
+
+                <div class="col-md-3">
+                    <label class="form-label text-secondary fw-bold small mb-1">Bitmə Tarixi</label>
+                    <input type="date" class="form-control shadow-sm" name="end_date" value="{{ selected_filters.end_date }}">
+                </div>
+
+                <div class="col-md-6 d-flex align-items-end justify-content-end gap-2">
+                    <a href="{{ url_for('admin_reports') }}" class="btn btn-light border shadow-sm px-4 text-dark">
+                        <i class="fas fa-sync-alt me-2"></i> Təmizlə
+                    </a>
+                    <button type="submit" class="btn btn-primary shadow-sm px-5">
+                        <i class="fas fa-search me-2"></i> Nəticələri Göstər
+                    </button>
                 </div>
             </form>
         </div>
 
-        <div class="content-container mb-5">
-            <h4 class="text-dark mb-3"><i class="fas fa-list me-2"></i> Bütün Xərc Detalları</h4>
+        <div class="content-container mb-5 p-0 overflow-hidden">
+            <div class="p-4 border-bottom bg-light d-flex justify-content-between align-items-center">
+                <h5 class="m-0 text-dark"><i class="fas fa-list me-2"></i> Bütün Xərc Detalları ({{ reports|length }} qeyd)</h5>
+            </div>
+            
             <div class="table-responsive">
-                <table class="table table-striped table-bordered table-hover">
-                    <thead class="table-dark">
+                <table class="table table-striped table-hover m-0">
+                    <thead>
                         <tr>
-                            <th>Tarix</th>
+                            <th class="ps-4">Tarix / Saat</th>
                             <th>Maşın</th>
-                            <th>Xərc Növü</th>
+                            <th>Sürücü</th>
+                            <th>Köməkçi</th>
+                            <th>Növ</th>
                             <th>Alt Növ</th>
                             <th class="text-end">Məbləğ (AZN)</th>
                             <th class="text-end">Litr</th>
-                            <th>Sürücü</th>
                             <th>Açıqlama</th>
-                            <th class="text-center">Sil</th>
+                            <th>Operator</th>
+                            <th class="text-center pe-4">Sil</th>
                         </tr>
                     </thead>
                     <tbody>
+                        {% if not reports %}
+                        <tr>
+                            <td colspan="11" class="text-center text-muted py-5">
+                                <i class="fas fa-box-open fa-3x mb-3 opacity-50"></i>
+                                <br>Seçilmiş filtrlərə uyğun heç bir xərc tapılmadı.
+                            </td>
+                        </tr>
+                        {% endif %}
+                        
                         {% for item in reports %}
                         <tr>
-                            <td>{{ item.timestamp.strftime('%d.%m.%Y') if item.timestamp else '-' }}</td>
-                            <td class="fw-bold text-primary">{% if item.car %}{{ item.car.car_number }}{% else %}-{% endif %}</td>
+                            <td class="ps-4 text-muted">{{ item.timestamp_str if item.timestamp_str else item.timestamp.strftime('%d.%m.%Y %H:%M') }}</td>
                             <td>
-                                {% if item.expense.type == 'Yanacaq' %}<span class="badge bg-success">Yanacaq</span>
-                                {% elif item.expense.type == 'Təmir' %}<span class="badge bg-warning text-dark">Təmir</span>
-                                {% elif item.expense.type == 'Cərimə' %}<span class="badge bg-danger">Cərimə</span>
-                                {% else %}<span class="badge bg-secondary">{{ item.expense.type }}</span>{% endif %}
+                                {% if item.car %}
+                                    <span class="badge bg-dark badge-custom shadow-sm">{{ item.car.car_number }}</span>
+                                {% else %}
+                                    <span class="badge bg-secondary badge-custom shadow-sm">Bilinmir</span>
+                                {% endif %}
                             </td>
-                            <td>{{ item.subtype or '-' }}</td>
+                            <td><span class="fw-medium">{{ item.driver_name_at_expense }}</span></td>
+                            <td>{{ item.assistant_name_at_expense }}</td>
+                            <td>
+                                {% if item.expense.type == 'Yanacaq' %}<span class="badge bg-success badge-custom shadow-sm">Yanacaq</span>
+                                {% elif item.expense.type == 'Təmir' %}<span class="badge bg-warning text-dark badge-custom shadow-sm">Təmir</span>
+                                {% elif item.expense.type == 'Cərimə' %}<span class="badge bg-danger badge-custom shadow-sm">Cərimə</span>
+                                {% elif item.expense.type == 'Avtoyuma' %}<span class="badge bg-info badge-custom shadow-sm">Avtoyuma</span>
+                                {% elif item.expense.type == 'Yemək' %}<span class="badge bg-primary badge-custom shadow-sm">Yemək</span>
+                                {% else %}<span class="badge bg-secondary badge-custom shadow-sm">{{ item.expense.type }}</span>{% endif %}
+                            </td>
+                            <td>
+                                {% if item.subtype and item.subtype != '-' %}
+                                    <span class="badge bg-light text-dark border shadow-sm">{{ item.subtype }}</span>
+                                {% else %}
+                                    <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
                             <td class="text-end fw-bold text-danger">{{ "%.2f"|format(item.expense.amount) }}</td>
-                            <td class="text-end">{{ item.expense.litr if item.expense.litr > 0 else '0' }}</td>
-                            <td>{{ item.driver_name_at_expense }}</td>
-                            <td><small>{{ item.clean_description }}</small></td>
-                            <td class="text-center">
+                            <td class="text-end">{{ item.expense.litr if item.expense.litr > 0 else '-' }}</td>
+                            <td><small class="text-muted">{{ item.clean_description }}</small></td>
+                            <td><small>{{ item.user.fullname if item.user else item.expense.entered_by }}</small></td>
+                            <td class="text-center pe-4">
                                 <form method="POST" action="{{ url_for('delete_expense', id=item.expense.expense_id) }}" onsubmit="return confirm('Bu xərci silmək istədiyinizə əminsiniz?');">
-                                    <button type="submit" class="btn btn-sm btn-outline-danger"><i class="fas fa-trash-alt"></i></button>
+                                    <button type="submit" class="btn btn-sm btn-outline-danger shadow-sm" title="Sil">
+                                        <i class="fas fa-trash-alt"></i>
+                                    </button>
                                 </form>
                             </td>
                         </tr>
                         {% endfor %}
                     </tbody>
-                    <tfoot class="table-light fw-bold">
+                    <tfoot class="bg-dark text-white fw-bold">
                         <tr>
-                            <td colspan="4" class="text-end">Səhifə üzrə Yekun Cəm:</td>
-                            <td class="text-end text-danger">{{ "%.2f"|format(total_amount) }} AZN</td>
+                            <td colspan="6" class="text-end ps-4 pt-3 pb-3">Səhifə üzrə Yekun Cəm:</td>
+                            <td class="text-end text-warning fs-5 pt-3 pb-3">{{ "%.2f"|format(total_amount) }} AZN</td>
                             <td colspan="4"></td>
                         </tr>
                     </tfoot>
