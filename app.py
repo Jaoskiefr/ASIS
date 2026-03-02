@@ -746,8 +746,24 @@ def admin_drivers():
 def add_driver():
     conn = get_connection_safe()
     try:
-        with conn.cursor() as c: c.execute("INSERT INTO drivers (name, license_no, phone, start_date, is_active, is_deleted) VALUES (%s, %s, %s, %s, 1, 0)", (request.form['name'], request.form.get('license_no'), request.form.get('phone'), request.form.get('start_date') or None)); conn.commit()
-    finally: conn.close()
+        # Formadan gələn məlumatları təhlükəsiz şəkildə alırıq
+        name = request.form.get('name', '').strip()
+        license_no = request.form.get('license_no', '').strip() or None
+        phone = request.form.get('phone', '').strip() or None
+        start_date = request.form.get('start_date', '').strip() or None
+        
+        with conn.cursor() as c: 
+            c.execute("INSERT INTO drivers (name, license_no, phone, start_date, is_active, is_deleted) VALUES (%s, %s, %s, %s, 1, 0)", 
+                      (name, license_no, phone, start_date))
+        conn.commit()
+        flash('Sürücü uğurla əlavə edildi.', 'success')
+        
+    except Exception as e:
+        # Hər hansı MySQL və ya kod xətası baş verərsə 500 error əvəzinə ekrana səbəbini yazacaq
+        flash(f'Sürücü əlavə edilərkən xəta baş verdi: {e}', 'danger')
+    finally: 
+        conn.close()
+        
     return redirect(url_for('admin_drivers'))
 
 @app.route('/admin/driver/edit/<int:id>', methods=['GET', 'POST'])
@@ -755,8 +771,24 @@ def add_driver():
 def edit_driver(id):
     if request.method == 'POST':
         conn = get_connection_safe()
-        with conn.cursor() as c: c.execute("UPDATE drivers SET name=%s, license_no=%s, phone=%s, start_date=%s WHERE id=%s", (request.form['name'], request.form.get('license_no'), request.form.get('phone'), request.form.get('start_date') or None, id)); conn.commit()
+        try:
+            name = request.form.get('name', '').strip()
+            license_no = request.form.get('license_no', '').strip() or None
+            phone = request.form.get('phone', '').strip() or None
+            start_date = request.form.get('start_date', '').strip() or None
+            
+            with conn.cursor() as c: 
+                c.execute("UPDATE drivers SET name=%s, license_no=%s, phone=%s, start_date=%s WHERE id=%s", 
+                          (name, license_no, phone, start_date, id))
+            conn.commit()
+            flash('Sürücü məlumatları yeniləndi.', 'success')
+        except Exception as e:
+            flash(f'Xəta baş verdi: {e}', 'danger')
+        finally:
+            conn.close()
+            
         return redirect(url_for('admin_drivers'))
+        
     return render_template('edit_driver.html', driver=get_driver_by_id(id))
 
 @app.route('/admin/driver/toggle_status/<int:id>', methods=['POST'])
