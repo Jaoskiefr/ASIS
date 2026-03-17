@@ -534,7 +534,82 @@ def admin_reports():
         return render_template('admin_reports.html', reports=fmt_reports, total_amount=total, cars=cars, drivers=drivers, assistants=assts, planners=plans, operators=ops, expense_types=EXPENSE_TYPES, fine_types=FINE_TYPES, repair_types=REPAIR_TYPES, selected_filters=current_filters)
     except Exception:
         return f"<h1>SİSTEM XƏTASI (DEBUG)</h1><pre>{traceback.format_exc()}</pre>"
+@app.route('/admin/reports/export')
+def admin_reports_export():
+    if session.get('role') not in ['admin', 'supervisor']: return redirect(url_for('index'))
+    
+    # Filtrləri alırıq (Axtarışda nə seçilibsə, onu Excel-ə çəkəcək)
+    f_car = request.args.get('car_id'); f_dr = request.args.get('driver_id'); f_t = request.args.get('expense_type'); f_sub = request.args.get('subtype_filter')
+    sd = request.args.get('start_date')
+    ed = request.args.get('end_date')
+    
+    sql = """SELECT e.*, e.created_at as timestamp, c.car_number, c.model, u.fullname as user_fullname,
+             d.name as driver_name_at_expense, a.name as assistant_name_at_expense, p.name as planner_name_at_expense
+             FROM expenses e
+             LEFT JOIN cars c ON e.car_id = c.id
+             LEFT JOIN users u ON e.entered_by = u.username COLLATE utf8mb4_unicode_ci
+             LEFT JOIN drivers d ON e.driver_id_at_expense = d.id
+             LEFT JOIN assistants a ON e.assistant_id_at_expense = a.id
+             LEFT JOIN planners p ON e.planner_id_at_expense = p.id
+             WHERE e.is_deleted = 0"""
+    p = []
+    
+    if f_car: sql += " AND e.car_id=%s"; p.append(f_car)
+    if f_dr: sql += " AND e.driver_id_at_expense=%s"; p.append(f_dr)
+    if f_t: sql += " AND e.type=%s"; p.append(f_t)
+    if f_sub: sql += " AND e.description LIKE %s"; p.append(f"%[{f_sub}]%")
+    if sd: sql += " AND DATE(e.created_at) >= %s"; p.append(sd)
+    if ed: sql += " AND DATE(e.created_at) <= %s"; p.append(ed)
+        
+    sql += " ORDER BY e.created_at DESC"
 
+    conn = get_connection_safe()
+    try:
+        with conn.cursor() as c:
+            c.execute(sql, tuple(p))
+            reports = c.fetchall()
+    finally: conn.close()
+
+    # Excel (CSV) faylını yaratmaq üçün lazımi modullar
+    import csv
+    import io
+    from flask import make_response
+
+    si = io.StringIO()
+    # Excel-də Azərbaycan şriftlərinin düzgün görünməsi üçün UTF-8 BOM əlavə edirik
+    si.write('\ufeff')
+    # Sütunları ayırmaq üçün nöqtəli-vergül (Excel üçün standartdır)
+    cw = csv.writer(si, delimiter=';')
+    
+    # Başlıq sətiri
+    cw.writerow(['Tarix / Saat', 'Maşın', 'Sürücü', 'Köməkçi', 'Planlamaçı', 'Xərc Növü', 'Alt Növ', 'Məbləğ (AZN)', 'Litr', 'Açıqlama', 'Operator'])
+    
+    # Məlumatların fayla yazılması
+    for r in reports:
+        t_stamp = r['timestamp'].strftime('%d.%m.%Y %H:%M') if r.get('timestamp') else datetime.now().strftime('%d.%m.%Y %H:%M')
+        car_info = r['car_number'] if r.get('car_number') else 'Bilinmir'
+        sub, clean = parse_expense_description(r.get('description', ''))
+        
+        cw.writerow([
+            t_stamp,
+            car_info,
+            r['driver_name_at_expense'] or "-",
+            r['assistant_name_at_expense'] or "-",
+            r['planner_name_at_expense'] or "-",
+            r['type'] or "-",
+            sub,
+            r['amount'] or "0",
+            r['litr'] or "-",
+            clean,
+            r['user_fullname'] or r['entered_by'] or "-"
+        ])
+        
+    output = make_response(si.getvalue())
+    filename = f"Xerc_Hesabatlari_{datetime.now().strftime('%Y%m%d_%H%M')}.csv"
+    output.headers["Content-Disposition"] = f"attachment; filename={filename}"
+    output.headers["Content-type"] = "text/csv; charset=utf-8"
+    
+    return output
 @app.route('/admin/expense/delete/<int:id>', methods=['POST'])
 def delete_expense(id):
     if session.get('role') not in ['admin', 'supervisor']: return redirect(url_for('index'))
