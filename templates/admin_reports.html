@@ -26,8 +26,13 @@
         .table td { vertical-align: middle; font-size: 0.9rem; }
         .badge-custom { font-size: 0.85em; padding: 0.5em 0.7em; }
     </style>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/asis-modern.css') }}">
 </head>
-<body>
+<body class="asis-app">
     {% if session['role'] == 'supervisor' %}
         {% include 'supervisor_navbar.html' %}
     {% else %}
@@ -69,6 +74,36 @@
                 </div>
 
                 <div class="col-md-3">
+                    <label class="form-label text-secondary fw-bold small mb-1">Köməkçi</label>
+                    <select class="form-select shadow-sm" name="assistant_id">
+                        <option value="">Bütün Köməkçilər</option>
+                        {% for assistant in assistants %}
+                        <option value="{{ assistant.id }}" {% if selected_filters.assistant_id|string == assistant.id|string %}selected{% endif %}>{{ assistant.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="col-md-3">
+                    <label class="form-label text-secondary fw-bold small mb-1">Planlamaçı</label>
+                    <select class="form-select shadow-sm" name="planner_id">
+                        <option value="">Bütün Planlamaçılar</option>
+                        {% for planner in planners %}
+                        <option value="{{ planner.id }}" {% if selected_filters.planner_id|string == planner.id|string %}selected{% endif %}>{{ planner.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="col-md-3">
+                    <label class="form-label text-secondary fw-bold small mb-1">Operator</label>
+                    <select class="form-select shadow-sm" name="operator_id">
+                        <option value="">Bütün Operatorlar</option>
+                        {% for operator in operators %}
+                        <option value="{{ operator.id }}" {% if selected_filters.operator_id|string == operator.id|string %}selected{% endif %}>{{ operator.fullname }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="col-md-3">
                     <label class="form-label text-secondary fw-bold small mb-1">Xərc Növü</label>
                     <select class="form-select shadow-sm" name="expense_type">
                         <option value="">Bütün Növlər</option>
@@ -84,16 +119,15 @@
                     <label class="form-label text-secondary fw-bold small mb-1">Alt Növ (Detal)</label>
                     <select class="form-select shadow-sm" name="subtype_filter">
                         <option value="">Bütün Alt Növlər</option>
-                        <optgroup label="Cərimə Növləri">
-                            {% for ft in fine_types %}
-                                <option value="{{ ft }}" {% if selected_filters.subtype_filter == ft %}selected{% endif %}>{{ ft }}</option>
-                            {% endfor %}
-                        </optgroup>
-                        <optgroup label="Təmir Növləri">
-                            {% for rt in repair_types %}
-                                <option value="{{ rt }}" {% if selected_filters.subtype_filter == rt %}selected{% endif %}>{{ rt }}</option>
-                            {% endfor %}
-                        </optgroup>
+                        {% for type_name, subtypes in expense_subtypes.items() %}
+                            {% if subtypes %}
+                                <optgroup label="{{ type_name }}">
+                                    {% for subtype in subtypes %}
+                                        <option value="{{ subtype }}" {% if selected_filters.subtype_filter == subtype %}selected{% endif %}>{{ subtype }}</option>
+                                    {% endfor %}
+                                </optgroup>
+                            {% endif %}
+                        {% endfor %}
                     </select>
                 </div>
 
@@ -208,5 +242,7 @@
 
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script src="{{ url_for('static', filename='js/asis-modern.js') }}"></script>
 </body>
 </html>

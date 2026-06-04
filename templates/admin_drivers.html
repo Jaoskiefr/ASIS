@@ -1,123 +1,71 @@
 <!DOCTYPE html>
 <html lang="az">
 <head>
-    <meta charset="UTF-8">
-    <title>ASİS - Sürücü İdarəetmə</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
-    <style>
-        body {
-            background-image: url("{{ url_for('static', filename='bg.jpg') }}");
-            background-size: cover; background-position: center; background-attachment: fixed; min-height: 100vh;
-        }
-        .content-container {
-            background-color: rgba(255, 255, 255, 0.95); border-radius: 8px; padding: 20px; margin-top: 20px; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
-        }
-        .form-inline-delete { display: inline-block; margin: 0; padding: 0; }
-        .start-date-col { width: 130px; }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ASİS • Sürücülər</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/asis-modern.css') }}">
 </head>
-<body>
-    {% include 'operator_navbar.html' %} 
-    
-    <div class="container-fluid mt-4 content-container">
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                {% for category, message in messages %}
-                    <div class="alert alert-{{ category or 'info' }} alert-dismissible fade show" role="alert">
-                        {{ message }}
-                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                    </div>
-                {% endfor %}
-            {% endif %}
-        {% endwith %}
-
-        <h1 class="text-success"><i class="fas fa-users"></i> Sürücü İdarəetmə Paneli</h1>
-        <hr>
-        
-        <div class="card mb-4">
-            <div class="card-header bg-success text-white">
-                Yeni Sürücü Əlavə Et
-            </div>
-            <div class="card-body">
-                <form method="POST" action="{{ url_for('add_driver') }}">
-                    <div class="row">
-                        <div class="col-md-3 mb-3">
-                            <label class="form-label">Ad, Soyad, Ata Adı</label>
-                            <input type="text" class="form-control" name="name" required>
-                        </div>
-                        <div class="col-md-3 mb-3">
-                            <label class="form-label">Sürücülük Vəsiqəsi No</label>
-                            <input type="text" class="form-control" name="license_no">
-                        </div>
-                        <div class="col-md-3 mb-3">
-                            <label class="form-label">Telefon Nömrəsi</label>
-                            <input type="tel" class="form-control" name="phone">
-                        </div>
-                        <div class="col-md-3 mb-3">
-                            <label class="form-label">İşə Başlama Tarixi</label>
-                            <input type="date" class="form-control" name="start_date">
-                        </div>
-                    </div>
-                    <button type="submit" class="btn btn-success"><i class="fas fa-save"></i> Sürücünü Yadda Saxla</button>
-                </form>
-            </div>
-        </div>
-
-        <h2 class="mt-5">Mövcud Sürücülər</h2>
-        <div class="table-responsive">
-            <table class="table table-striped table-bordered table-hover align-middle">
-                <thead class="bg-dark text-white">
-                    <tr>
-                        <th>ID</th>
-                        <th>Ad Soyad Ata Adı</th>
-                        <th>Vəsiqə No</th>
-                        <th>Telefon</th>
-                        <th class="start-date-col">Başlama T.</th>
-                        <th>Status</th> <!-- Yeni Sütun -->
-                        <th class="text-center">Əməliyyatlar</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for driver in drivers %}
-                    <tr class="{% if not driver.is_active %}table-secondary text-muted{% endif %}">
-                        <td>{{ driver.id }}</td>
-                        <td>{{ driver.name }}</td>
-                        <td>{{ driver.license_no or '-' }}</td> 
-                        <td>{{ driver.phone or '-' }}</td> 
-                        <td>{{ driver.start_date or '-' }}</td> 
-                        
-                        <!-- Status Switch -->
-                        <td class="text-center">
-                            <form action="{{ url_for('toggle_driver_status', id=driver.id) }}" method="POST" class="d-inline">
-                                <div class="form-check form-switch d-flex justify-content-center">
-                                    <input class="form-check-input" type="checkbox" role="switch" onchange="this.form.submit()" 
-                                           title="Aktiv/Passiv et" style="cursor: pointer;"
-                                           {% if driver.is_active %}checked{% endif %}>
-                                </div>
-                            </form>
-                            <small class="d-block" style="font-size: 0.7em;">
-                                {% if driver.is_active %}Aktiv{% else %}Passiv{% endif %}
-                            </small>
-                        </td>
-                        
-                        <td class="text-center">
-                            <a href="{{ url_for('edit_driver', id=driver.id) }}" class="btn btn-sm btn-warning me-1">
-                                <i class="fas fa-edit"></i>
-                            </a>
-                            
-                            <form method="POST" action="{{ url_for('delete_driver', id=driver.id) }}" class="form-inline-delete" onsubmit="return confirm('Bu sürücünü ARXİVLƏMƏK (Silmək) istədiyinizə əminsiniz?');">
-                                <button type="submit" class="btn btn-sm btn-danger">
-                                    <i class="fas fa-trash-alt"></i>
-                                </button>
-                            </form>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
+<body class="asis-app">
+  {% if session['role'] == 'supervisor' %}{% include 'supervisor_navbar.html' %}{% elif session['role'] == 'admin' %}{% include 'admin_navbar.html' %}{% else %}{% include 'operator_navbar.html' %}{% endif %}
+  {% set active_count = drivers|selectattr('is_active')|list|length %}
+  <div class="container-fluid mt-4 content-container">
+    {% with messages = get_flashed_messages(with_categories=true) %}{% if messages %}{% for category, message in messages %}<div class="alert alert-{{ category or 'info' }} alert-dismissible fade show" role="alert">{{ message }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>{% endfor %}{% endif %}{% endwith %}
+    <div class="asis-page-hero">
+      <div><div class="asis-page-kicker">İdarəetmə</div><h1 class="asis-page-title"><i class="fas fa-id-card text-primary"></i> Sürücülər</h1><p class="asis-page-description">Sürücü kartları premium görünüşdə, əlavə et/redaktə et/sil və info əməliyyatları bir yerdə.</p></div>
+      <button class="btn btn-primary" data-bs-toggle="collapse" data-bs-target="#addDriverPanel"><i class="fas fa-plus me-2"></i> Yeni sürücü</button>
     </div>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+    <div class="row g-3 mb-4">
+      <div class="col-lg-4 col-md-6"><div class="asis-summary-card"><div class="asis-summary-icon"><i class="fas fa-id-card"></i></div><div><div class="asis-summary-label">Cəmi sürücü</div><div class="asis-summary-value">{{ drivers|length }}</div></div></div></div>
+      <div class="col-lg-4 col-md-6"><div class="asis-summary-card"><div class="asis-summary-icon success"><i class="fas fa-circle-check"></i></div><div><div class="asis-summary-label">Aktiv</div><div class="asis-summary-value">{{ active_count }}</div></div></div></div>
+      <div class="col-lg-4 col-md-6"><div class="asis-summary-card"><div class="asis-summary-icon warning"><i class="fas fa-file-invoice"></i></div><div><div class="asis-summary-label">Xərc qeydi olan</div><div class="asis-summary-value">{{ drivers|selectattr('expense_count')|list|length }}</div></div></div></div>
+    </div>
+
+    <div class="collapse mb-4" id="addDriverPanel">
+      <div class="card asis-add-panel"><div class="card-header"><i class="fas fa-user-plus me-2"></i>Yeni sürücü əlavə et</div><div class="card-body">
+        <form class="row g-3" method="POST" action="{{ url_for('add_driver') }}">
+          <div class="col-lg-4 col-md-6"><label class="form-label">Ad, soyad</label><input type="text" name="name" class="form-control" required></div>
+          <div class="col-lg-3 col-md-6"><label class="form-label">Vəsiqə nömrəsi</label><input type="text" name="license_no" class="form-control"></div>
+          <div class="col-lg-3 col-md-6"><label class="form-label">Telefon</label><input type="text" name="phone" class="form-control"></div>
+          <div class="col-lg-2 col-md-6"><label class="form-label">İşə başlama</label><input type="date" name="start_date" class="form-control"></div>
+          <div class="col-12"><button class="btn btn-primary"><i class="fas fa-save me-1"></i> Yadda saxla</button></div>
+        </form>
+      </div></div>
+    </div>
+
+    <div class="asis-list-toolbar mb-4" data-asis-filter-wrap>
+      <div class="asis-toolbar-search"><i class="fas fa-search"></i><input type="search" class="form-control" placeholder="Sürücü adı, telefon və ya vəsiqə nömrəsi axtar..." data-asis-filter-input></div>
+      <div class="asis-toolbar-hint">Sürücünü tez tap və idarə et.</div>
+    </div>
+
+    <div class="asis-management-grid" data-asis-filter-grid>
+      {% for d in drivers %}
+      <div class="asis-entity-card {% if not d.is_active %}opacity-75{% endif %}" data-asis-filter-item>
+        <div class="asis-entity-head"><div class="asis-entity-icon"><i class="fas fa-user-check"></i></div><span class="badge {% if d.is_active %}bg-success{% else %}bg-secondary{% endif %}"><span class="asis-status-dot {% if not d.is_active %}off{% endif %}"></span>{% if d.is_active %}Aktiv{% else %}Passiv{% endif %}</span></div>
+        <div class="asis-entity-title">{{ d.name }}</div>
+        <div class="asis-entity-subtitle">{{ d.phone or 'Telefon yoxdur' }}</div>
+        <div class="asis-entity-meta">
+          <div class="asis-mini-stat"><span>Təcrübə</span><strong>{{ d.experience_str or '-' }}</strong></div>
+          <div class="asis-mini-stat"><span>Xərc</span><strong>{{ '%.2f'|format(d.total_amount or 0) }} AZN</strong></div>
+          <div class="asis-mini-stat"><span>Qeyd sayı</span><strong>{{ d.expense_count or 0 }}</strong></div>
+          <div class="asis-mini-stat"><span>Təyinli maşın</span><strong>{{ d.car_count or 0 }}</strong></div>
+        </div>
+        <div class="asis-entity-actions">
+          <a class="btn btn-sm btn-primary" href="{{ url_for('entity_info', entity_type='driver', entity_id=d.id) }}"><i class="fas fa-circle-info me-1"></i> Info</a>
+          <a href="{{ url_for('edit_driver', id=d.id) }}" class="btn btn-sm btn-warning"><i class="fas fa-edit me-1"></i> Redaktə</a>
+          <form action="{{ url_for('toggle_driver_status', id=d.id) }}" method="POST" class="d-inline"><button class="btn btn-sm btn-outline-secondary"><i class="fas fa-power-off me-1"></i>{% if d.is_active %}Passiv et{% else %}Aktiv et{% endif %}</button></form>
+          <form method="POST" action="{{ url_for('delete_driver', id=d.id) }}" onsubmit="return confirm('Sürücünü silməyə əminsiniz?');" class="d-inline"><button class="btn btn-sm btn-outline-danger"><i class="fas fa-trash-alt"></i></button></form>
+        </div>
+      </div>
+      {% else %}<div class="alert alert-secondary">Hələ sürücü yoxdur.</div>{% endfor %}
+    </div>
+  </div>
+  <div class="asis-footer-credit"><span><strong>Dev by Asif Atababayev</strong></span><span>All rights reserved © 2025 • Sirab IT Team</span></div>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script><script src="{{ url_for('static', filename='js/asis-modern.js') }}"></script>
 </body>
 </html>

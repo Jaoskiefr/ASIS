@@ -3,44 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ASİS - Admin Panel</title>
+    <title>ASİS • Admin Panel</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    
-    <style>
-        body {
-            background-image: url("{{ url_for('static', filename='bg.jpg') }}");
-            background-size: cover; background-position: center; background-attachment: fixed; min-height: 100vh;
-        }
-        .content-container {
-            background-color: rgba(255, 255, 255, 0.95); border-radius: 8px; padding: 20px; margin-top: 20px; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
-        }
-        .stat-card { 
-            border-radius: 10px; padding: 20px; margin-bottom: 15px; /* Margin azaldıldı */
-            color: white; box-shadow: 0 4px 10px rgba(0,0,0,0.1); 
-            transition: transform 0.2s ease; position: relative; /* Position relative əlavə edildi */
-            overflow: hidden; /* İkonun kənara çıxmaması üçün */
-        }
-        .stat-card:hover { transform: translateY(-5px); }
-        .stat-card .stat-icon { font-size: 2.5rem; opacity: 0.2; position: absolute; right: 15px; top: 50%; transform: translateY(-50%); } /* Ölçü və opacity azaldıldı */
-        .stat-card .stat-value { font-size: 2rem; font-weight: bold; } /* Ölçü azaldıldı */
-        .stat-card .stat-label { font-size: 1rem; } /* Ölçü azaldıldı */
-        
-        /* Mövcud rənglər */
-        .bg-card-operators { background: linear-gradient(45deg, #dc3545, #a71d2a); }
-        .bg-card-cars { background: linear-gradient(45deg, #0d6efd, #0a58ca); }
-        .bg-card-drivers { background: linear-gradient(45deg, #198754, #146c43); }
-        
-        /* YENİ RƏNGLƏR */
-        .bg-card-assistants { background: linear-gradient(45deg, #6c757d, #495057); } 
-        .bg-card-planners { background: linear-gradient(45deg, #ffc107, #cc9a06); color: #212529 !important; } /* Sarı rəng və tünd mətn */
-        .bg-card-planners .stat-icon { opacity: 0.15; } /* Sarı fonda ikon daha az görünsün */
-    </style>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/asis-modern.css') }}">
 </head>
-<body>
+<body class="asis-app">
     {% include 'admin_navbar.html' %}
-    
+
     <div class="container-fluid mt-4 content-container">
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
@@ -52,124 +26,197 @@
             {% endif %}
         {% endwith %}
 
-        <div class="row">
-            <div class="col-12 mb-4">
-                <h2 class="text-danger"><i class="fas fa-user-shield"></i> Admin Paneli</h2>
-                <p class="text-muted">Xoş gəldiniz, {{ session['fullname'] }}. Buradan sistemi idarə edə bilərsiniz.</p>
+        <div class="asis-page-hero">
+            <div>
+                <div class="asis-page-kicker">Admin paneli</div>
+                <h1 class="asis-page-title"><i class="fas fa-user-shield text-primary"></i> Nəzarət və analitika</h1>
+                <p class="asis-page-description">Aylıq xərc dəyişimini, sistem saylarını və əsas idarəetmə bölmələrini bir paneldən izlə.</p>
             </div>
+            <div class="asis-quick-actions">
+                <a href="{{ url_for('admin_users') }}" class="btn btn-primary"><i class="fas fa-user-cog me-2"></i> Operatorlar</a>
+                <a href="{{ url_for('admin_reports') }}" class="btn btn-warning"><i class="fas fa-chart-pie me-2"></i> Xərc hesabatı</a>
+                <a href="{{ url_for('admin_settings') }}" class="btn btn-dark"><i class="fas fa-sliders me-2"></i> Sistem ayarları</a>
+            </div>
+        </div>
 
-            <div class="col-12 mb-4">
-                <div class="card">
-                    <div class="card-body d-flex flex-wrap gap-2">
-                        <a href="{{ url_for('admin_users') }}" class="btn btn-lg btn-danger"> <i class="fas fa-user-cog me-2"></i> Operator İdarəetməsi </a>
-                        <a href="{{ url_for('admin_reports') }}" class="btn btn-lg btn-warning text-dark"> <i class="fas fa-chart-pie me-2"></i> Xərc Hesabatları </a>
+        <div class="row g-3 mb-4">
+            <div class="col-xl-3 col-md-6">
+                <div class="asis-summary-card">
+                    <div class="asis-summary-icon danger"><i class="fas fa-sack-dollar"></i></div>
+                    <div>
+                        <div class="asis-summary-label">Bu ay xərc</div>
+                        <div class="asis-summary-value">{{ "%.2f"|format(stats.monthly_total) }} <small>AZN</small></div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xl-3 col-md-6">
+                <div class="asis-summary-card">
+                    <div class="asis-summary-icon warning"><i class="fas fa-calendar-minus"></i></div>
+                    <div>
+                        <div class="asis-summary-label">Keçən ay</div>
+                        <div class="asis-summary-value">{{ "%.2f"|format(stats.previous_month_total) }} <small>AZN</small></div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xl-3 col-md-6">
+                <div class="asis-summary-card">
+                    <div class="asis-summary-icon {% if stats.monthly_delta <= 0 %}success{% else %}danger{% endif %}">
+                        <i class="fas {% if stats.monthly_delta <= 0 %}fa-arrow-trend-down{% else %}fa-arrow-trend-up{% endif %}"></i>
+                    </div>
+                    <div>
+                        <div class="asis-summary-label">Fərq</div>
+                        <div class="asis-summary-value">{{ "%+.2f"|format(stats.monthly_delta) }} <small>AZN</small></div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xl-3 col-md-6">
+                <div class="asis-summary-card">
+                    <div class="asis-summary-icon"><i class="fas fa-truck-moving"></i></div>
+                    <div>
+                        <div class="asis-summary-label">Avtomobil</div>
+                        <div class="asis-summary-value">{{ stats.car_count }}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-4">
+            <div class="col-xl-8">
+                <div class="card asis-admin-chart-card h-100">
+                    <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+                        <div>
+                            <strong><i class="fas fa-chart-line me-2"></i> Aylıq xərc trendi</strong>
+                            <div class="small text-muted mt-1">Son 12 ay üzrə xərc xətti. Bu ayın göstəricisini keçən ayla müqayisə et.</div>
+                        </div>
+                        <span class="badge bg-primary">{{ "%.2f"|format(stats.monthly_total) }} AZN</span>
+                    </div>
+                    <div class="card-body">
+                        <div class="asis-chart-wrap">
+                            <canvas id="monthlyLineChart"></canvas>
+                        </div>
                     </div>
                 </div>
             </div>
 
-            <div class="col-lg-7 mb-4">
+            <div class="col-xl-4">
                 <div class="card h-100">
-                    <div class="card-header">
-                        <i class="fas fa-chart-line me-2"></i> <strong>Bu Ayın Xərcləri</strong> 
-                        (Ümumi: <span class="text-danger fw-bold">{{ "%.2f"|format(stats.monthly_total) }} AZN</span>)
+                    <div class="card-header"><i class="fas fa-layer-group me-2"></i> Sistem xülasəsi</div>
+                    <div class="card-body">
+                        <div class="asis-admin-mini-grid">
+                            <a href="{{ url_for('admin_users') }}" class="asis-admin-mini-card">
+                                <i class="fas fa-users"></i><span>Operatorlar</span><strong>{{ stats.operator_count }}</strong>
+                            </a>
+                            <a href="{{ url_for('admin_cars') }}" class="asis-admin-mini-card">
+                                <i class="fas fa-car"></i><span>Avtomobillər</span><strong>{{ stats.car_count }}</strong>
+                            </a>
+                            <a href="{{ url_for('admin_drivers') }}" class="asis-admin-mini-card">
+                                <i class="fas fa-id-card"></i><span>Sürücülər</span><strong>{{ stats.driver_count }}</strong>
+                            </a>
+                            <a href="{{ url_for('admin_assistants') }}" class="asis-admin-mini-card">
+                                <i class="fas fa-user-friends"></i><span>Köməkçilər</span><strong>{{ stats.assistant_count }}</strong>
+                            </a>
+                            <a href="{{ url_for('admin_planners') }}" class="asis-admin-mini-card">
+                                <i class="fas fa-user-tie"></i><span>Planlamaçılar</span><strong>{{ stats.planner_count }}</strong>
+                            </a>
+                            <a href="{{ url_for('admin_reports') }}" class="asis-admin-mini-card">
+                                <i class="fas fa-file-invoice-dollar"></i><span>Hesabat</span><strong><i class="fas fa-arrow-right"></i></strong>
+                            </a>
+                        </div>
                     </div>
-                    <div class="card-body" style="min-height: 350px; position: relative;"> 
+                </div>
+            </div>
+
+            <div class="col-12">
+                <div class="card asis-category-card">
+                    <div class="card-header"><i class="fas fa-chart-column me-2"></i> Bu ay xərc növləri üzrə bölgü</div>
+                    <div class="card-body">
                         {% if chart_data.data and chart_data.data|sum > 0 %}
-                            <canvas id="expenseDoughnutChart"></canvas>
+                            <div class="row g-3">
+                                {% for label in chart_data.labels %}
+                                    {% set amount = chart_data.data[loop.index0] %}
+                                    <div class="col-lg-3 col-md-4 col-sm-6">
+                                        <div class="asis-type-pill">
+                                            <span>{{ label }}</span>
+                                            <strong>{{ "%.2f"|format(amount) }} AZN</strong>
+                                        </div>
+                                    </div>
+                                {% endfor %}
+                            </div>
                         {% else %}
-                            <div class="alert alert-info text-center h-100 d-flex align-items-center justify-content-center"> Bu ay üçün heç bir xərc qeydə alınmayıb. </div>
+                            <div class="alert alert-info mb-0 text-center">Bu ay üçün hələ xərc qeydə alınmayıb.</div>
                         {% endif %}
                     </div>
                 </div>
             </div>
-
-            <div class="col-lg-5 mb-4">
-                <div class="stat-card bg-card-operators">
-                    <div class="stat-icon"><i class="fas fa-users"></i></div>
-                    <div class="stat-value">{{ stats.operator_count }}</div>
-                    <div class="stat-label">Ümumi Operator Sayı</div>
-                </div>
-                <div class="stat-card bg-card-cars">
-                    <div class="stat-icon"><i class="fas fa-car"></i></div>
-                    <div class="stat-value">{{ stats.car_count }}</div>
-                    <div class="stat-label">Ümumi Avtomobil Sayı</div>
-                </div>
-                <div class="stat-card bg-card-drivers">
-                    <div class="stat-icon"><i class="fas fa-id-card"></i></div>
-                    <div class="stat-value">{{ stats.driver_count }}</div>
-                    <div class="stat-label">Ümumi Sürücü Sayı</div>
-                </div>
-                
-                <div class="stat-card bg-card-assistants">
-                    <div class="stat-icon"><i class="fas fa-user-friends"></i></div> 
-                    <div class="stat-value">{{ stats.assistant_count }}</div>      
-                    <div class="stat-label">Ümumi Köməkçi Sayı</div>
-                </div>
-                <div class="stat-card bg-card-planners">
-                    <div class="stat-icon"><i class="fas fa-user-tie"></i></div>      
-                    <div class="stat-value">{{ stats.planner_count }}</div>          
-                    <div class="stat-label">Ümumi Planlamaçı Sayı</div>
-                </div>
-            </div>
         </div>
+
+        <div class="asis-dashboard-credit mt-4"><strong>Dev by Asif Atababayev</strong> · All rights reserved © 2025 · Sirab IT Team</div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-    
     <script>
-        const doughnutChartCanvas = document.getElementById('expenseDoughnutChart');
-        if (doughnutChartCanvas) {
-            const chartLabels = {{ chart_data.labels | tojson }};
-            const chartDataValues = {{ chart_data.data | tojson }};
-            
-            // Yeni rəng palitrası (kifayət qədər rəng əlavə et)
-            const backgroundColors = [
-                'rgba(25, 135, 84, 0.7)',  // Yaşıl (Yanacaq?)
-                'rgba(255, 193, 7, 0.7)',   // Sarı (Təmir?)
-                'rgba(220, 53, 69, 0.7)',   // Qırmızı (Cərimə?)
-                'rgba(13, 202, 240, 0.7)',  // Açıq Mavi (Avtoyuma?)
-                'rgba(13, 110, 253, 0.7)',  // Göy (Yemək?)
-                'rgba(108, 117, 125, 0.7)', // Boz (Digər?)
-                'rgba(255, 159, 64, 0.7)',  // Narıncı
-                'rgba(153, 102, 255, 0.7)', // Bənövşəyi
-            ];
-            
-            // Əgər data varsa və cəmi sıfırdan böyükdürsə diaqramı çək
-            if (chartDataValues && chartDataValues.length > 0 && chartDataValues.reduce((a, b) => a + b, 0) > 0) {
-                const ctx = doughnutChartCanvas.getContext('2d');
-                new Chart(ctx, {
-                    type: 'doughnut', 
-                    data: { 
-                        labels: chartLabels, 
-                        datasets: [{
-                            label: 'Xərc Məbləği (AZN)', 
-                            data: chartDataValues,
-                            // Dinamik olaraq lazım olan qədər rəng seç
-                            backgroundColor: backgroundColors.slice(0, chartLabels.length), 
-                            borderColor: '#fff', 
-                            borderWidth: 2, 
-                            hoverOffset: 4 
-                        }] 
+        const monthlyCanvas = document.getElementById('monthlyLineChart');
+        if (monthlyCanvas) {
+            const labels = {{ monthly_trend.labels | tojson }};
+            const values = {{ monthly_trend.data | tojson }};
+            const ctx = monthlyCanvas.getContext('2d');
+
+            const gradient = ctx.createLinearGradient(0, 0, 0, 320);
+            gradient.addColorStop(0, 'rgba(36, 87, 214, .28)');
+            gradient.addColorStop(1, 'rgba(14, 165, 233, .02)');
+
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Aylıq xərc (AZN)',
+                        data: values,
+                        fill: true,
+                        backgroundColor: gradient,
+                        borderColor: '#2457d6',
+                        borderWidth: 3,
+                        pointRadius: 4,
+                        pointHoverRadius: 7,
+                        pointBackgroundColor: '#0ea5e9',
+                        pointBorderColor: '#fff',
+                        pointBorderWidth: 2,
+                        tension: .36
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const value = context.raw || 0;
+                                    return 'Xərc: ' + value.toFixed(2) + ' AZN';
+                                }
+                            }
+                        }
                     },
-                    options: { 
-                        responsive: true, 
-                        maintainAspectRatio: false, 
-                        plugins: { 
-                            legend: { position: 'bottom' },
-                            tooltip: { 
-                                callbacks: { 
-                                    label: function(context) { 
-                                        let label = context.label || ''; 
-                                        let value = context.raw || 0; 
-                                        return label + ': ' + value.toFixed(2) + ' AZN'; 
-                                    } 
-                                } 
-                            } 
-                        } 
+                    scales: {
+                        x: {
+                            grid: { display: false },
+                            ticks: { color: '#667085', font: { weight: 700 } }
+                        },
+                        y: {
+                            beginAtZero: true,
+                            grid: { color: 'rgba(15,23,42,.08)' },
+                            ticks: {
+                                color: '#667085',
+                                callback: function(value) { return value + ' AZN'; }
+                            }
+                        }
                     }
-                });
-            }
+                }
+            });
         }
     </script>
+    <script src="{{ url_for('static', filename='js/asis-modern.js') }}"></script>
 </body>
 </html>

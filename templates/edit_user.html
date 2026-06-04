@@ -14,8 +14,13 @@
             background-color: rgba(255, 255, 255, 0.95); border-radius: 8px; padding: 20px; margin-top: 20px; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
         }
     </style>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/asis-modern.css') }}">
 </head>
-<body>
+<body class="asis-app">
     {% include 'admin_navbar.html' %} 
     
     <div class="container-fluid mt-4 content-container">
@@ -70,5 +75,7 @@
         </div>
     </div>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script src="{{ url_for('static', filename='js/asis-modern.js') }}"></script>
 </body>
 </html>

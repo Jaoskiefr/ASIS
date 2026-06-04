@@ -3,172 +3,631 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ASİS - Giriş</title>
+    <title>ASİS • Giriş</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;600&display=swap" rel="stylesheet">
-    
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
     <style>
-        body {
-            background-image: url("{{ url_for('static', filename='bg.jpg') }}"); 
-            background-size: cover; 
-            background-position: center;
-            background-repeat: no-repeat;
-            min-height: 100vh;
-            display: flex;
-            align-items: center; 
-            justify-content: center;
-            backdrop-filter: blur(5px); 
-            /* YENİ: Daha yaxşı font göstərimi üçün */
-            font-family: 'Poppins', sans-serif; 
+        :root{
+            --night:#050b18;
+            --panel:#071224;
+            --panel-2:#0b172b;
+            --line:rgba(255,255,255,.13);
+            --line-2:rgba(111,201,255,.28);
+            --text:#f8fbff;
+            --muted:#9aaac0;
+            --muted-2:#6f8198;
+            --blue:#2d6bff;
+            --cyan:#22c7ff;
+            --cyan-soft:rgba(34,199,255,.13);
+            --shadow:0 34px 100px rgba(0,0,0,.48);
         }
-        .login-card {
-            background-color: rgba(255, 255, 255, 0.95); 
-            border-radius: 15px;
-            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15); 
-            padding: 35px 40px; 
-            max-width: 450px; 
-            width: 100%;
-            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        *{box-sizing:border-box}
+        html,body{width:100%;height:100%;margin:0;overflow:hidden}
+        body{
+            font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+            background:
+                radial-gradient(circle at 16% 14%, rgba(45,107,255,.24), transparent 28%),
+                radial-gradient(circle at 84% 18%, rgba(34,199,255,.18), transparent 24%),
+                linear-gradient(135deg,#020617 0%,#071326 54%,#081827 100%);
+            color:var(--text);
         }
-        .login-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 12px 35px rgba(0, 0, 0, 0.2); 
+        .page{
+            width:100vw;
+            height:100vh;
+            padding:18px;
+            display:grid;
+            place-items:center;
+            position:relative;
+            isolation:isolate;
         }
-        /* YENİ: Başlıq üçün xüsusi stil */
-        .asis-title {
-            font-family: 'Poppins', sans-serif; /* Poppins fontu (əgər yüklənibsə) */
-            font-weight: 600; /* Qalın yazı */
-            font-size: 2.5rem; /* Biraz böyük ölçü */
-            color: #0a58ca; /* Daha tünd mavi */
-            letter-spacing: 1.5px; /* Hərflər arası məsafə */
-            margin-bottom: 5px;
+        .page:before{
+            content:"";
+            position:absolute;
+            inset:0;
+            z-index:-2;
+            background-image:
+                linear-gradient(rgba(255,255,255,.035) 1px,transparent 1px),
+                linear-gradient(90deg,rgba(255,255,255,.035) 1px,transparent 1px);
+            background-size:42px 42px;
+            mask-image:radial-gradient(circle at center,black 0%,black 54%,transparent 92%);
         }
-        .login-subtitle {
-            color: #6c757d; 
-            margin-bottom: 25px; 
-            font-weight: 300; /* İncə yazı */
+        .page:after{
+            content:"";
+            position:absolute;
+            inset:0;
+            z-index:-1;
+            background:radial-gradient(circle at center,transparent 0%,rgba(2,6,23,.58) 100%);
         }
-        .input-group-text {
-            background-color: #e9ecef;
-            border: 1px solid #dee2e6; 
-            color: #495057;
-            cursor: pointer;
+        .login-board{
+            width:min(1180px,calc(100vw - 36px));
+            height:min(720px,calc(100vh - 36px));
+            border-radius:32px;
+            border:1px solid rgba(138,199,255,.24);
+            background:rgba(7,18,36,.68);
+            box-shadow:var(--shadow), inset 0 1px 0 rgba(255,255,255,.10);
+            overflow:hidden;
+            display:grid;
+            grid-template-columns:1.12fr .88fr;
+            backdrop-filter:blur(22px);
         }
-        .form-control {
-            border-left: none; 
-            border-right: none;
+        .visual-side{
+            position:relative;
+            min-width:0;
+            overflow:hidden;
+            background:#071224;
         }
-         .input-group .form-control:not(:first-child) {
-            border-top-left-radius: 0;
-            border-bottom-left-radius: 0;
+        .visual-photo{
+            position:absolute;
+            inset:0;
+            background-image:
+                linear-gradient(90deg,rgba(3,9,22,.82) 0%,rgba(3,9,22,.38) 42%,rgba(3,9,22,.66) 100%),
+                linear-gradient(180deg,rgba(3,9,22,.55),rgba(3,9,22,.80)),
+                url("{{ url_for('static', filename='bg.jpg') }}");
+            background-size:cover;
+            background-position:center;
+            transform:scale(1.02);
         }
-         .input-group .form-control:not(:last-child) {
-            border-top-right-radius: 0;
-            border-bottom-right-radius: 0;
+        .visual-glow{
+            position:absolute;
+            width:460px;
+            height:460px;
+            border-radius:999px;
+            right:-110px;
+            top:-90px;
+            background:radial-gradient(circle,rgba(34,199,255,.30),transparent 64%);
+            filter:blur(10px);
+            opacity:.75;
         }
-         .input-group > :not(:first-child):not(.dropdown-menu):not(.valid-tooltip):not(.valid-feedback):not(.invalid-tooltip):not(.invalid-feedback) {
-            margin-left: -1px; 
-             border-top-left-radius: 0;
-             border-bottom-left-radius: 0;
+        .visual-content{
+            position:relative;
+            z-index:1;
+            height:100%;
+            padding:42px;
+            display:flex;
+            flex-direction:column;
+            justify-content:space-between;
         }
-         .input-group > :not(:last-child):not(.dropdown-menu):not(.dropdown-toggle):not(.valid-tooltip):not(.valid-feedback):not(.invalid-tooltip):not(.invalid-feedback) {
-             border-top-right-radius: 0;
-             border-bottom-right-radius: 0;
+        .brand{
+            display:flex;
+            align-items:center;
+            gap:14px;
         }
-         .input-group-text:first-child {
-            border-right: none;
+        .brand-icon{
+            width:58px;
+            height:58px;
+            border-radius:20px;
+            display:grid;
+            place-items:center;
+            font-size:1.42rem;
+            background:linear-gradient(135deg,var(--blue),var(--cyan));
+            box-shadow:0 18px 44px rgba(45,107,255,.34);
         }
-         .input-group-text:last-child {
-             border-left: none;
-         }
-         .input-group > .form-control:not(:first-child):not(:last-child) {
-            border-left: none;
-            border-right: none;
+        .brand-title{font-weight:900;font-size:1.68rem;letter-spacing:-.05em;line-height:1}
+        .brand-sub{font-size:.84rem;color:#b8c7da;margin-top:6px;font-weight:700}
+        .visual-center{
+            max-width:520px;
+            margin-top:auto;
+            margin-bottom:32px;
         }
-        .form-control:focus {
-            box-shadow: none;
-            border-color: #86b7fe; 
-            position: relative; 
-            z-index: 2;
+        .eyebrow{
+            display:inline-flex;
+            align-items:center;
+            gap:8px;
+            padding:9px 13px;
+            border-radius:999px;
+            background:rgba(255,255,255,.085);
+            border:1px solid rgba(255,255,255,.14);
+            color:#bfeeff;
+            font-size:.72rem;
+            letter-spacing:.12em;
+            text-transform:uppercase;
+            font-weight:900;
+            backdrop-filter:blur(12px);
         }
-         .form-control:focus + .input-group-text {
-             border-color: #86b7fe;
-             z-index: 2;
-         }
-         .input-group:focus-within .input-group-text{
-             border-color: #86b7fe;
-             z-index: 2;
-         }
-        .btn-primary {
-            transition: background-color 0.2s ease-in-out, transform 0.1s ease;
+        .short-title{
+            margin:18px 0 12px;
+            font-size:clamp(2.05rem,3.8vw,3.65rem);
+            line-height:1;
+            letter-spacing:-.065em;
+            font-weight:900;
+            max-width:560px;
         }
-        .btn-primary:hover {
-            background-color: #0b5ed7; 
-            transform: scale(1.02); 
+        .short-title span{color:#83ddff}
+        .short-text{
+            margin:0;
+            color:#b2c2d6;
+            font-weight:580;
+            line-height:1.65;
+            max-width:455px;
+            font-size:.98rem;
         }
-        .form-check-label {
-            font-size: 0.9rem;
-            color: #495057;
+        .mini-pills{
+            display:flex;
+            flex-wrap:wrap;
+            gap:10px;
+        }
+        .mini-pill{
+            display:inline-flex;
+            align-items:center;
+            gap:8px;
+            padding:10px 13px;
+            border-radius:999px;
+            background:rgba(255,255,255,.085);
+            border:1px solid rgba(255,255,255,.13);
+            color:#d9e9fb;
+            font-size:.82rem;
+            font-weight:800;
+            backdrop-filter:blur(14px);
+        }
+        .mini-pill i{color:#76ddff}
+        .form-side{
+            min-width:0;
+            position:relative;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            padding:42px;
+            border-left:1px solid rgba(255,255,255,.10);
+            background:
+                radial-gradient(circle at 50% 2%,rgba(34,199,255,.13),transparent 36%),
+                linear-gradient(180deg,rgba(255,255,255,.055),rgba(255,255,255,.025));
+        }
+        .form-side:before{
+            content:"";
+            position:absolute;
+            inset:26px;
+            border-radius:28px;
+            border:1px solid rgba(255,255,255,.055);
+            pointer-events:none;
+        }
+        .login-card{
+            width:min(410px,100%);
+            position:relative;
+            z-index:1;
+        }
+        .card-head{margin-bottom:24px;text-align:left}
+        .secure-chip{
+            display:inline-flex;
+            align-items:center;
+            gap:8px;
+            padding:8px 12px;
+            border-radius:999px;
+            background:rgba(34,199,255,.11);
+            border:1px solid rgba(34,199,255,.22);
+            color:#a8edff;
+            font-size:.72rem;
+            font-weight:900;
+            letter-spacing:.12em;
+            text-transform:uppercase;
+            margin-bottom:16px;
+        }
+        .card-head h1{
+            margin:0 0 8px;
+            font-size:2.15rem;
+            line-height:1;
+            letter-spacing:-.06em;
+            font-weight:900;
+        }
+        .card-head p{
+            margin:0;
+            color:var(--muted);
+            font-size:.95rem;
+            line-height:1.55;
+        }
+        .form-label{
+            color:#e9f3ff;
+            font-size:.86rem;
+            font-weight:850;
+            margin-bottom:8px;
+        }
+        .premium-input{
+            display:flex;
+            align-items:center;
+            min-height:54px;
+            border-radius:16px;
+            background:rgba(255,255,255,.075);
+            border:1px solid rgba(255,255,255,.14);
+            overflow:hidden;
+            transition:.18s ease;
+        }
+        .premium-input:focus-within{
+            background:rgba(255,255,255,.10);
+            border-color:rgba(34,199,255,.66);
+            box-shadow:0 0 0 4px rgba(34,199,255,.10);
+        }
+        .input-icon{
+            width:54px;
+            height:54px;
+            display:grid;
+            place-items:center;
+            color:#78dfff;
+            border-right:1px solid rgba(255,255,255,.10);
+        }
+        .premium-input input{
+            min-width:0;
+            flex:1;
+            height:54px;
+            border:0;
+            outline:0;
+            color:#fff;
+            background:transparent;
+            padding:0 14px;
+            font-weight:750;
+        }
+        .premium-input input::placeholder{color:#75869d}
+        .toggle-password{
+            width:52px;
+            height:54px;
+            display:grid;
+            place-items:center;
+            border:0;
+            background:transparent;
+            color:#90a3ba;
+            border-left:1px solid rgba(255,255,255,.10);
+        }
+        .remember-row{
+            display:flex;
+            align-items:center;
+            justify-content:space-between;
+            gap:14px;
+            margin:14px 0 20px;
+            color:#a6b6c9;
+            font-size:.84rem;
+            font-weight:700;
+        }
+        .remember-row input{accent-color:var(--cyan)}
+        .login-btn{
+            min-height:56px;
+            border:0;
+            border-radius:16px;
+            background:linear-gradient(135deg,var(--blue),var(--cyan));
+            color:#fff;
+            font-weight:950;
+            letter-spacing:.005em;
+            box-shadow:0 20px 44px rgba(45,107,255,.28), inset 0 1px 0 rgba(255,255,255,.24);
+            transition:.18s ease;
+        }
+        .login-btn:hover{transform:translateY(-1px);filter:brightness(1.04);color:#fff}
+        .login-note{
+            margin-top:16px;
+            display:flex;
+            align-items:flex-start;
+            gap:10px;
+            padding:13px 14px;
+            border-radius:16px;
+            background:rgba(255,255,255,.055);
+            border:1px solid rgba(255,255,255,.10);
+            color:#a4b5c9;
+            font-size:.82rem;
+            line-height:1.5;
+        }
+        .signature{
+            margin-top:22px;
+            padding-top:18px;
+            border-top:1px solid rgba(255,255,255,.10);
+            color:#7d8fa7;
+            font-size:.78rem;
+            line-height:1.65;
+            display:flex;
+            justify-content:space-between;
+            align-items:flex-end;
+            gap:16px;
+        }
+        .signature strong{display:block;color:#eff7ff;font-size:.85rem}
+        .signature-logo{
+            min-width:48px;
+            height:34px;
+            border-radius:999px;
+            display:grid;
+            place-items:center;
+            background:rgba(34,199,255,.09);
+            border:1px solid rgba(34,199,255,.22);
+            color:#9beaff;
+            font-size:.70rem;
+            font-weight:950;
+            letter-spacing:.08em;
+        }
+        .alert{
+            border-radius:15px!important;
+            background:rgba(255,255,255,.08)!important;
+            border:1px solid rgba(255,255,255,.13)!important;
+            color:#fff!important;
+            font-weight:750;
+            font-size:.86rem;
+        }
+        .alert-danger{background:rgba(244,63,94,.13)!important;border-color:rgba(244,63,94,.35)!important;color:#ffdce3!important}
+        .btn-close{filter:invert(1) grayscale(100%)}
+
+        /* Premium animated background - panel arxasındakı boş qara sahə üçün */
+        .motion-bg{
+            position:absolute;
+            inset:0;
+            z-index:0;
+            overflow:hidden;
+            pointer-events:none;
+        }
+        .motion-bg .aurora{
+            position:absolute;
+            inset:-28%;
+            opacity:.78;
+            filter:blur(34px) saturate(1.15);
+            background:
+                radial-gradient(circle at 18% 30%, rgba(45,107,255,.34), transparent 24%),
+                radial-gradient(circle at 76% 24%, rgba(34,199,255,.26), transparent 22%),
+                radial-gradient(circle at 56% 78%, rgba(19,92,187,.24), transparent 28%),
+                conic-gradient(from 180deg at 50% 50%, rgba(45,107,255,.10), rgba(34,199,255,.20), rgba(14,165,233,.08), rgba(45,107,255,.10));
+            animation: auroraMove 18s ease-in-out infinite alternate;
+        }
+        .motion-bg .mesh{
+            position:absolute;
+            inset:-4%;
+            opacity:.46;
+            background-image:
+                linear-gradient(rgba(117,213,255,.055) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(117,213,255,.055) 1px, transparent 1px);
+            background-size:54px 54px;
+            animation: meshDrift 16s linear infinite;
+            mask-image:radial-gradient(circle at center, black 0%, black 64%, transparent 94%);
+        }
+        .motion-bg .route-lines{
+            position:absolute;
+            inset:0;
+            width:100%;
+            height:100%;
+            opacity:.55;
+            mix-blend-mode:screen;
+        }
+        .route-lines path{
+            fill:none;
+            stroke:rgba(128,225,255,.32);
+            stroke-width:1.15;
+            stroke-linecap:round;
+            stroke-dasharray:8 16;
+            animation: routeDash 10s linear infinite;
+        }
+        .route-lines path:nth-child(2){animation-duration:13s;opacity:.72;stroke:rgba(45,107,255,.32)}
+        .route-lines path:nth-child(3){animation-duration:16s;opacity:.55;stroke:rgba(34,199,255,.26)}
+        .motion-bg .orb{
+            position:absolute;
+            width:280px;
+            height:280px;
+            border-radius:999px;
+            background:radial-gradient(circle, rgba(34,199,255,.22), transparent 68%);
+            filter:blur(14px);
+            opacity:.52;
+            animation: orbFloat 12s ease-in-out infinite alternate;
+        }
+        .motion-bg .orb.o1{left:4%;top:10%;animation-delay:-2s}
+        .motion-bg .orb.o2{right:8%;bottom:6%;width:360px;height:360px;background:radial-gradient(circle,rgba(45,107,255,.23),transparent 68%);animation-duration:15s}
+        .motion-bg .orb.o3{left:46%;bottom:-18%;width:420px;height:420px;background:radial-gradient(circle,rgba(34,199,255,.16),transparent 70%);animation-duration:18s;animation-delay:-6s}
+        .particle{
+            position:absolute;
+            left:var(--x);
+            top:var(--y);
+            width:var(--s);
+            height:var(--s);
+            border-radius:999px;
+            background:rgba(145,231,255,.78);
+            box-shadow:0 0 18px rgba(34,199,255,.52);
+            opacity:.55;
+            animation: particleFloat var(--d) ease-in-out infinite;
+            animation-delay:var(--delay);
+        }
+        .data-stream{
+            position:absolute;
+            width:220px;
+            height:1px;
+            left:-240px;
+            top:var(--top);
+            opacity:.52;
+            background:linear-gradient(90deg, transparent, rgba(34,199,255,.80), transparent);
+            filter:drop-shadow(0 0 8px rgba(34,199,255,.55));
+            animation: streamMove var(--time) linear infinite;
+            animation-delay:var(--delay);
+        }
+        .login-board{
+            position:relative;
+            z-index:2;
+        }
+        @keyframes auroraMove{
+            0%{transform:translate3d(-2%, -1%, 0) rotate(0deg) scale(1)}
+            50%{transform:translate3d(2%, 1.5%, 0) rotate(6deg) scale(1.04)}
+            100%{transform:translate3d(1%, -2%, 0) rotate(-4deg) scale(1.02)}
+        }
+        @keyframes meshDrift{
+            from{background-position:0 0,0 0}
+            to{background-position:54px 54px,54px 54px}
+        }
+        @keyframes routeDash{
+            to{stroke-dashoffset:-240}
+        }
+        @keyframes orbFloat{
+            from{transform:translate3d(0,0,0) scale(1)}
+            to{transform:translate3d(38px,-28px,0) scale(1.08)}
+        }
+        @keyframes particleFloat{
+            0%,100%{transform:translate3d(0,0,0);opacity:.25}
+            45%{opacity:.78}
+            50%{transform:translate3d(var(--tx),var(--ty),0)}
+        }
+        @keyframes streamMove{
+            from{transform:translateX(0)}
+            to{transform:translateX(calc(100vw + 480px))}
+        }
+        @media (prefers-reduced-motion: reduce){
+            .motion-bg *{animation:none!important}
+        }
+
+        @media(max-width:980px){
+            html,body{overflow:auto}
+            .page{height:auto;min-height:100vh;overflow:auto;padding:14px}
+            .login-board{height:auto;min-height:0;grid-template-columns:1fr;border-radius:24px}
+            .visual-side{min-height:330px}
+            .visual-content{padding:28px}
+            .visual-center{margin:38px 0 22px}.form-side{padding:30px;border-left:0;border-top:1px solid rgba(255,255,255,.10)}
+            .short-title{font-size:2.25rem}.short-text{font-size:.92rem}
+        }
+        @media(max-width:560px){
+            .visual-side{min-height:280px}.visual-content{padding:22px}.brand-icon{width:50px;height:50px;border-radius:17px}.brand-title{font-size:1.45rem}.brand-sub{font-size:.78rem}.mini-pills{display:none}.form-side{padding:22px}.card-head h1{font-size:1.85rem}.signature{flex-direction:column;align-items:flex-start}.login-board{width:calc(100vw - 20px)}
         }
     </style>
 </head>
 <body>
-    <div class="login-card">
-        <h2 class="text-center asis-title">ASİS</h2> 
-        <p class="text-center login-subtitle">Avtomobil və Sürücü İdarəetmə Sistemi</p>
-        
-        {% if error %}
-            <div class="alert alert-danger" role="alert">
-                <i class="fas fa-exclamation-triangle me-2"></i>{{ error }}
-            </div>
-        {% endif %}
+    <main class="page">
 
-        <form method="POST" action="{{ url_for('login') }}">
-            <div class="input-group mb-3">
-                <span class="input-group-text"><i class="fas fa-user"></i></span>
-                <input type="text" class="form-control" id="username" name="username" placeholder="İstifadəçi Adı" required>
-            </div>
-            
-            <div class="input-group mb-3">
-                <span class="input-group-text"><i class="fas fa-lock"></i></span>
-                <input type="password" class="form-control" id="password" name="password" placeholder="Parol" required>
-                <span class="input-group-text" id="togglePassword">
-                    <i class="fas fa-eye"></i>
-                </span>
-            </div>
+        <div class="motion-bg" aria-hidden="true">
+            <div class="aurora"></div>
+            <div class="mesh"></div>
+            <div class="orb o1"></div>
+            <div class="orb o2"></div>
+            <div class="orb o3"></div>
+            <svg class="route-lines" viewBox="0 0 1200 760" preserveAspectRatio="none">
+                <path d="M-80 170 C 160 70, 290 330, 520 230 S 920 70, 1290 250" />
+                <path d="M-120 610 C 120 480, 310 690, 560 520 S 960 360, 1310 540" />
+                <path d="M160 -60 C 230 160, 450 170, 550 355 S 650 680, 1020 820" />
+            </svg>
+            <span class="data-stream" style="--top:12%;--time:13s;--delay:-0.5s"></span>
+            <span class="data-stream" style="--top:27%;--time:13s;--delay:-0.8s"></span>
+            <span class="data-stream" style="--top:41%;--time:13s;--delay:-6.8s"></span>
+            <span class="data-stream" style="--top:58%;--time:9s;--delay:-8.9s"></span>
+            <span class="data-stream" style="--top:73%;--time:11s;--delay:-1.2s"></span>
+            <span class="data-stream" style="--top:86%;--time:15s;--delay:-1.9s"></span>
+            <span class="particle" style="--x:84%;--y:18%;--s:2px;--tx:10px;--ty:-19px;--d:13s;--delay:-15.5s"></span>
+            <span class="particle" style="--x:16%;--y:90%;--s:4px;--tx:-38px;--ty:25px;--d:16s;--delay:-17.4s"></span>
+            <span class="particle" style="--x:14%;--y:31%;--s:2px;--tx:69px;--ty:27px;--d:10s;--delay:-7.9s"></span>
+            <span class="particle" style="--x:94%;--y:87%;--s:4px;--tx:47px;--ty:-22px;--d:17s;--delay:-7.4s"></span>
+            <span class="particle" style="--x:3%;--y:24%;--s:3px;--tx:27px;--ty:-15px;--d:12s;--delay:-14.1s"></span>
+            <span class="particle" style="--x:46%;--y:17%;--s:2px;--tx:37px;--ty:-38px;--d:15s;--delay:-2.7s"></span>
+            <span class="particle" style="--x:80%;--y:37%;--s:2px;--tx:57px;--ty:18px;--d:11s;--delay:-0.5s"></span>
+            <span class="particle" style="--x:51%;--y:14%;--s:4px;--tx:15px;--ty:56px;--d:20s;--delay:-6.9s"></span>
+            <span class="particle" style="--x:49%;--y:77%;--s:2px;--tx:-43px;--ty:-45px;--d:20s;--delay:-13.9s"></span>
+            <span class="particle" style="--x:40%;--y:14%;--s:2px;--tx:-35px;--ty:-2px;--d:14s;--delay:-9.8s"></span>
+            <span class="particle" style="--x:49%;--y:24%;--s:3px;--tx:30px;--ty:-24px;--d:20s;--delay:-13.2s"></span>
+            <span class="particle" style="--x:90%;--y:86%;--s:2px;--tx:-17px;--ty:18px;--d:21s;--delay:-13.6s"></span>
+            <span class="particle" style="--x:62%;--y:52%;--s:3px;--tx:-4px;--ty:37px;--d:15s;--delay:-2.8s"></span>
+            <span class="particle" style="--x:10%;--y:33%;--s:2px;--tx:20px;--ty:1px;--d:14s;--delay:-16.8s"></span>
+            <span class="particle" style="--x:75%;--y:95%;--s:3px;--tx:-6px;--ty:33px;--d:17s;--delay:-10.9s"></span>
+            <span class="particle" style="--x:85%;--y:62%;--s:2px;--tx:7px;--ty:-33px;--d:13s;--delay:-4.6s"></span>
+            <span class="particle" style="--x:71%;--y:37%;--s:4px;--tx:49px;--ty:24px;--d:16s;--delay:-11.5s"></span>
+            <span class="particle" style="--x:20%;--y:69%;--s:3px;--tx:-37px;--ty:46px;--d:10s;--delay:-2.5s"></span>
+            <span class="particle" style="--x:22%;--y:84%;--s:2px;--tx:48px;--ty:26px;--d:11s;--delay:-11.1s"></span>
+            <span class="particle" style="--x:79%;--y:63%;--s:4px;--tx:4px;--ty:20px;--d:10s;--delay:-5.8s"></span>
+            <span class="particle" style="--x:17%;--y:91%;--s:4px;--tx:8px;--ty:48px;--d:20s;--delay:-11.9s"></span>
+            <span class="particle" style="--x:40%;--y:59%;--s:2px;--tx:56px;--ty:-50px;--d:21s;--delay:-2.2s"></span>
+            <span class="particle" style="--x:36%;--y:68%;--s:2px;--tx:69px;--ty:-37px;--d:20s;--delay:-12.6s"></span>
+            <span class="particle" style="--x:84%;--y:68%;--s:4px;--tx:-10px;--ty:-31px;--d:15s;--delay:-4.3s"></span>
+        </div>
+        <section class="login-board" aria-label="ASİS giriş paneli">
+            <aside class="visual-side">
+                <div class="visual-photo"></div>
+                <div class="visual-glow"></div>
+                <div class="visual-content">
+                    <div class="brand">
+                        <div class="brand-icon"><i class="fas fa-route"></i></div>
+                        <div>
+                            <div class="brand-title">ASİS</div>
+                            <div class="brand-sub">Avtomobil və xərc idarəetmə sistemi</div>
+                        </div>
+                    </div>
 
-            <div class="form-check mb-3">
-                <input class="form-check-input" type="checkbox" value="" id="rememberMe" name="remember">
-                <label class="form-check-label" for="rememberMe">
-                    Məni yadda saxla
-                </label>
-            </div>
+                    <div class="visual-center">
+                        <div class="eyebrow"><i class="fas fa-shield-halved"></i> Sirab daxili panel</div>
+                        <h2 class="short-title">Avtomobil və Sürücü <span>İdarəetmə Sistemi</span></h2>
+                        <p class="short-text">Maşın, sürücü, operator və xərc məlumatları vahid paneldə.</p>
+                    </div>
 
-            <div class="d-grid">
-                <button type="submit" class="btn btn-primary btn-lg mt-2">
-                   <i class="fas fa-sign-in-alt me-2"></i> Giriş Et
-                </button>
-            </div>
-        </form>
-    </div>
+                    <div class="mini-pills">
+                        <span class="mini-pill"><i class="fas fa-receipt"></i> Xərc</span>
+                        <span class="mini-pill"><i class="fas fa-chart-line"></i> Hesabat</span>
+                        <span class="mini-pill"><i class="fas fa-fingerprint"></i> Audit</span>
+                    </div>
+                </div>
+            </aside>
+
+            <section class="form-side">
+                <div class="login-card">
+                    <div class="card-head">
+                        <div class="secure-chip"><i class="fas fa-lock"></i> Təhlükəsiz giriş</div>
+                        <h1>Xoş gəlmisiniz</h1>
+                        <p>Sistemə daxil olmaq üçün məlumatlarınızı yazın.</p>
+                    </div>
+
+                    {% with messages = get_flashed_messages(with_categories=true) %}
+                        {% if messages %}
+                            {% for category, message in messages %}
+                                <div class="alert alert-{{ category or 'info' }} alert-dismissible fade show" role="alert">
+                                    {{ message }}
+                                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                                </div>
+                            {% endfor %}
+                        {% endif %}
+                    {% endwith %}
+                    {% if error %}<div class="alert alert-danger"><i class="fas fa-circle-exclamation me-2"></i>{{ error }}</div>{% endif %}
+
+                    <form method="POST" action="{{ url_for('login') }}" autocomplete="on">
+                        <div class="mb-3">
+                            <label class="form-label" for="username">İstifadəçi adı</label>
+                            <div class="premium-input">
+                                <span class="input-icon"><i class="fas fa-user"></i></span>
+                                <input type="text" id="username" name="username" placeholder="Məs: admin" required autofocus>
+                            </div>
+                        </div>
+                        <div class="mb-0">
+                            <label class="form-label" for="password">Parol</label>
+                            <div class="premium-input">
+                                <span class="input-icon"><i class="fas fa-key"></i></span>
+                                <input type="password" id="password" name="password" placeholder="Parol" required>
+                                <button class="toggle-password" type="button" id="togglePassword" title="Parolu göstər/gizlət"><i class="fas fa-eye"></i></button>
+                            </div>
+                        </div>
+                        <div class="remember-row">
+                            <label class="d-flex align-items-center gap-2 m-0"><input type="checkbox" name="remember" value="1"> Məni xatırla</label>
+                            <span><i class="fas fa-user-shield me-1"></i> Daxili panel</span>
+                        </div>
+                        <button type="submit" class="btn login-btn w-100"><i class="fas fa-right-to-bracket me-2"></i> Daxil ol</button>
+                    </form>
+
+                    <div class="login-note"><i class="fas fa-circle-info"></i><span>Girişdən sonra panel istifadəçi roluna görə açılır.</span></div>
+                    <div class="signature">
+                        <div>
+                            <strong>Dev by Asif Atababayev</strong>
+                            <div>All rights reserved © 2025 • Sirab IT Team</div>
+                        </div>
+                        <div class="signature-logo">ASIS</div>
+                    </div>
+                </div>
+            </section>
+        </section>
+    </main>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-    
     <script>
-        const togglePassword = document.getElementById('togglePassword');
-        const passwordInput = document.getElementById('password');
-
-        if (togglePassword && passwordInput) {
-            togglePassword.addEventListener('click', function (e) {
-                const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
-                passwordInput.setAttribute('type', type);
-                const icon = this.querySelector('i');
-                icon.classList.toggle('fa-eye');
-                icon.classList.toggle('fa-eye-slash');
-            });
-        }
+        const toggle=document.getElementById('togglePassword');
+        const password=document.getElementById('password');
+        if(toggle&&password){toggle.addEventListener('click',()=>{const hidden=password.type==='password';password.type=hidden?'text':'password';toggle.innerHTML=hidden?'<i class="fas fa-eye-slash"></i>':'<i class="fas fa-eye"></i>';});}
     </script>
 </body>
 </html>

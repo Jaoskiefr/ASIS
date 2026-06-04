@@ -15,8 +15,13 @@
         }
         .table th, .table td { font-size: 0.9rem; }
     </style>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/asis-modern.css') }}">
 </head>
-<body>
+<body class="asis-app">
     {% include 'admin_navbar.html' %} 
     
     <div class="container-fluid mt-4 content-container">
@@ -36,7 +41,7 @@
         <p class="text-muted">Burada admin tərəfindən silinmiş köhnə xərc qeydləri göstərilir.</p>
         <hr>
         
-        <h2 class="mt-4">Arxiv ({{ reports|length }} qeyd tapıldı)</h2>
+        <h2 class="mt-4">Arxiv ({{ pagination.total }} qeyd tapıldı)</h2>
         <div class="table-responsive">
             <table class="table table-striped table-bordered table-hover table-sm"> 
                 <thead class="bg-secondary text-white">
@@ -99,7 +104,32 @@
                 </tbody>
             </table>
         </div>
+        {% if pagination.pages > 1 %}
+        <div class="asis-pagination-wrap">
+          <div class="asis-pagination-info">Səhifə {{ pagination.page }} / {{ pagination.pages }} · Cəmi {{ pagination.total }} qeyd · 100-100 göstərilir</div>
+          <ul class="pagination asis-pagination">
+            <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}">
+              <a class="page-link" href="{{ url_for('admin_deleted_reports', page=pagination.prev_page) }}">‹</a>
+            </li>
+            {% for p in range(1, pagination.pages + 1) %}
+              {% if p == 1 or p == pagination.pages or (p >= pagination.page - 2 and p <= pagination.page + 2) %}
+                <li class="page-item {% if p == pagination.page %}active{% endif %}">
+                  <a class="page-link" href="{{ url_for('admin_deleted_reports', page=p) }}">{{ p }}</a>
+                </li>
+              {% elif p == pagination.page - 3 or p == pagination.page + 3 %}
+                <li class="page-item disabled"><span class="page-link">...</span></li>
+              {% endif %}
+            {% endfor %}
+            <li class="page-item {% if not pagination.has_next %}disabled{% endif %}">
+              <a class="page-link" href="{{ url_for('admin_deleted_reports', page=pagination.next_page) }}">›</a>
+            </li>
+          </ul>
+        </div>
+        {% endif %}
+
     </div>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script src="{{ url_for('static', filename='js/asis-modern.js') }}"></script>
 </body>
 </html>

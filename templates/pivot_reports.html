@@ -26,8 +26,13 @@
         @keyframes pulse { 0% { transform: scale(0.9); opacity: 0.7; } 50% { transform: scale(1.1); opacity: 1; } 100% { transform: scale(0.9); opacity: 0.7; } }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
     </style>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/asis-modern.css') }}">
 </head>
-<body>
+<body class="asis-app">
     {% if session['role'] == 'supervisor' %}
         {% include 'supervisor_navbar.html' %}
     {% else %}
@@ -114,5 +119,7 @@
         }
     });
     </script>
+
+    <script src="{{ url_for('static', filename='js/asis-modern.js') }}"></script>
 </body>
 </html>

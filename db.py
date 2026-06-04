@@ -5,7 +5,7 @@ DB_CONFIG = {
     'host': 'localhost',
     'user': 'asis_app',
     'password': 'GarajPro2025!',  # Parolunuzun düzgün olduğundan əmin olun
-    'database': 'asis_db',
+    'database': 'asis_new_db',
     'charset': 'utf8mb4',
     'cursorclass': pymysql.cursors.DictCursor,
     'connect_timeout': 10
@@ -46,6 +46,22 @@ def check_and_update_tables():
                     print(f"-> '{table}' cədvəlinə 'is_active' sütunu əlavə edilir...")
                     # Default olaraq 1 (Aktiv) olsun
                     cursor.execute(f"ALTER TABLE {table} ADD COLUMN is_active TINYINT(1) DEFAULT 1")
+
+            # Sistem ayarları cədvəli
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS app_settings (
+                    setting_key VARCHAR(100) NOT NULL PRIMARY KEY,
+                    setting_value TEXT NOT NULL,
+                    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+            """)
+            cursor.execute("""
+                ALTER TABLE app_settings MODIFY setting_value TEXT NOT NULL
+            """)
+            cursor.execute("""
+                INSERT IGNORE INTO app_settings (setting_key, setting_value)
+                VALUES ('allow_past_expense_date', '1')
+            """)
                     
         conn.commit()
         print("Baza yoxlanışı tamamlandı.")

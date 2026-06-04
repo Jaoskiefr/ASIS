@@ -39,8 +39,13 @@
         .bg-card-passive-users { background: linear-gradient(45deg, #dc3545, #a71d2a); }
         .bg-card-logs { background: linear-gradient(45deg, #6c757d, #495057); }
     </style>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/asis-modern.css') }}">
 </head>
-<body>
+<body class="asis-app">
     {% include 'supervisor_navbar.html' %}
     
     <div class="container-fluid mt-4 content-container">
@@ -178,5 +183,8 @@
             }
         }
     </script>
+
+    <script src="{{ url_for('static', filename='js/asis-modern.js') }}"></script>
+<div class="asis-footer-credit"><span><strong>Dev by Asif Atababayev</strong></span><span>All rights reserved © 2025 • Sirab IT Team</span></div>
 </body>
 </html>

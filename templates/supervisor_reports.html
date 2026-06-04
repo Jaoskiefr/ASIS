@@ -17,8 +17,13 @@
         .table-success-light { background-color: #d1e7dd !important; }
         .table-danger-light { background-color: #f8d7da !important; }
     </style>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/asis-modern.css') }}">
 </head>
-<body>
+<body class="asis-app">
     {% include 'supervisor_navbar.html' %} 
     
     <div class="container-fluid mt-4 content-container">
@@ -102,7 +107,7 @@
             </div>
         </div>
         
-        <h4 class="mt-4">Nəticələr ({{ reports|length }} qeyd tapıldı)</h4>
+        <h4 class="mt-4">Nəticələr ({{ pagination.total }} qeyd tapıldı)</h4>
         <div class="table-responsive">
             <table class="table table-striped table-bordered table-hover table-sm"> 
                 <thead class="bg-dark text-white">
@@ -146,7 +151,32 @@
                 </tbody>
             </table>
         </div>
+        {% if pagination.pages > 1 %}
+        <div class="asis-pagination-wrap">
+          <div class="asis-pagination-info">Səhifə {{ pagination.page }} / {{ pagination.pages }} · 100-100 göstərilir</div>
+          <ul class="pagination asis-pagination">
+            <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}">
+              <a class="page-link" href="{{ url_for('supervisor_reports', username=request.args.get('username',''), action=request.args.get('action',''), hostname=request.args.get('hostname',''), start_date=request.args.get('start_date',''), page=pagination.prev_page) }}">‹</a>
+            </li>
+            {% for p in range(1, pagination.pages + 1) %}
+              {% if p == 1 or p == pagination.pages or (p >= pagination.page - 2 and p <= pagination.page + 2) %}
+                <li class="page-item {% if p == pagination.page %}active{% endif %}">
+                  <a class="page-link" href="{{ url_for('supervisor_reports', username=request.args.get('username',''), action=request.args.get('action',''), hostname=request.args.get('hostname',''), start_date=request.args.get('start_date',''), page=p) }}">{{ p }}</a>
+                </li>
+              {% elif p == pagination.page - 3 or p == pagination.page + 3 %}
+                <li class="page-item disabled"><span class="page-link">...</span></li>
+              {% endif %}
+            {% endfor %}
+            <li class="page-item {% if not pagination.has_next %}disabled{% endif %}">
+              <a class="page-link" href="{{ url_for('supervisor_reports', username=request.args.get('username',''), action=request.args.get('action',''), hostname=request.args.get('hostname',''), start_date=request.args.get('start_date',''), page=pagination.next_page) }}">›</a>
+            </li>
+          </ul>
+        </div>
+        {% endif %}
+
     </div>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script src="{{ url_for('static', filename='js/asis-modern.js') }}"></script>
 </body>
 </html>

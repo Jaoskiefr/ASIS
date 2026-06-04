@@ -58,6 +58,18 @@ REPAIR_TYPES = [
     'Digər'
 ]
 
+FUEL_TYPES = [
+    'Dizel',
+    'AI-92',
+    'AI-95'
+]
+
+DEFAULT_EXPENSE_SUBTYPES = {
+    'Yanacaq': FUEL_TYPES,
+    'Cərimə': FINE_TYPES,
+    'Təmir': REPAIR_TYPES
+}
+
 # --- KÖMƏKÇİ PARSE FUNKSİYASI ---
 def parse_expense_description(description):
     if not description: return "-", "-"
@@ -200,6 +212,133 @@ def get_all_users():
         with conn.cursor() as c: c.execute("SELECT * FROM users ORDER BY fullname"); return c.fetchall()
     finally: conn.close()
 
+def get_setting(setting_key, default_value=None):
+    """Sistem ayarını oxuyur. Cədvəl yoxdursa default qaytarır ki proqram dayanmasın."""
+    conn = None
+    try:
+        conn = get_connection_safe()
+        with conn.cursor() as c:
+            c.execute("SELECT setting_value FROM app_settings WHERE setting_key=%s", (setting_key,))
+            row = c.fetchone()
+            return row['setting_value'] if row else default_value
+    except Exception:
+        return default_value
+    finally:
+        try:
+            if conn: conn.close()
+        except Exception:
+            pass
+
+def set_setting(setting_key, setting_value):
+    conn = get_connection_safe()
+    try:
+        with conn.cursor() as c:
+            c.execute("""
+                INSERT INTO app_settings (setting_key, setting_value)
+                VALUES (%s, %s)
+                ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value), updated_at=NOW()
+            """, (setting_key, str(setting_value)))
+        conn.commit()
+    finally:
+        conn.close()
+
+def is_past_expense_allowed():
+    return str(get_setting('allow_past_expense_date', '1')) == '1'
+
+def _safe_json_load(value, default):
+    try:
+        if not value:
+            return default
+        loaded = json.loads(value)
+        return loaded if loaded else default
+    except Exception:
+        return default
+
+def _clean_lines(raw):
+    items = []
+    seen = set()
+    for line in (raw or '').splitlines():
+        val = line.strip()
+        if not val:
+            continue
+        key = val.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        items.append(val)
+    return items
+
+def parse_subtype_settings(raw, known_types=None):
+    """Ayar səhifəsindəki 'Növ: alt1, alt2' formatını dict-ə çevirir."""
+    known_types = known_types or []
+    data = {}
+    for line in (raw or '').splitlines():
+        line = line.strip()
+        if not line or ':' not in line:
+            continue
+        name, values = line.split(':', 1)
+        name = name.strip()
+        if not name:
+            continue
+        vals = []
+        seen = set()
+        for part in values.replace(';', ',').split(','):
+            val = part.strip()
+            if not val:
+                continue
+            key = val.casefold()
+            if key not in seen:
+                vals.append(val)
+                seen.add(key)
+        data[name] = vals
+    for t in known_types:
+        data.setdefault(t, [])
+    return data
+
+def get_expense_types():
+    types = _safe_json_load(get_setting('expense_types_json', None), EXPENSE_TYPES)
+    return [str(x).strip() for x in types if str(x).strip()] or EXPENSE_TYPES
+
+def get_expense_subtypes():
+    defaults = {k: list(v) for k, v in DEFAULT_EXPENSE_SUBTYPES.items()}
+    data = _safe_json_load(get_setting('expense_subtypes_json', None), defaults)
+    if not isinstance(data, dict):
+        data = defaults
+    clean = {}
+    for t in get_expense_types():
+        vals = data.get(t, [])
+        if isinstance(vals, str):
+            vals = [x.strip() for x in vals.replace(';', ',').split(',') if x.strip()]
+        clean[t] = [str(x).strip() for x in vals if str(x).strip()]
+    return clean
+
+def get_all_subtype_values():
+    vals = []
+    seen = set()
+    for group in get_expense_subtypes().values():
+        for val in group:
+            key = val.casefold()
+            if key not in seen:
+                vals.append(val)
+                seen.add(key)
+    return vals
+
+def parse_expense_datetime(value):
+    """Formadan gələn tarix/saatı təhlükəsiz datetime-a çevirir."""
+    if not value:
+        return datetime.now()
+    value = value.strip()
+    for fmt in ('%Y-%m-%dT%H:%M', '%Y-%m-%d %H:%M', '%Y-%m-%d'):
+        try:
+            parsed = datetime.strptime(value, fmt)
+            if fmt == '%Y-%m-%d':
+                now = datetime.now()
+                parsed = parsed.replace(hour=now.hour, minute=now.minute, second=0)
+            return parsed
+        except ValueError:
+            continue
+    raise ValueError('Xərc tarixi düzgün formatda deyil.')
+
 # --- LOG & EXPENSE ---
 def log_action(action, details, status='success'):
     try:
@@ -212,13 +351,15 @@ def log_action(action, details, status='success'):
         conn.commit(); conn.close()
     except: pass
 
-def insert_expense(car_id, expense_type, amount, litr, description, did, aid, pid, entered_by):
+def insert_expense(car_id, expense_type, amount, litr, description, did, aid, pid, entered_by, expense_datetime=None):
+    if expense_datetime is None:
+        expense_datetime = datetime.now()
     conn = get_connection_safe()
     try:
         with conn.cursor() as c:
             c.execute("""INSERT INTO expenses (car_id, type, amount, litr, description, entered_by, driver_id_at_expense, assistant_id_at_expense, planner_id_at_expense, created_at, is_deleted)
-                         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), 0)""",
-                      (int(car_id), expense_type, float(amount), float(litr), description, entered_by, did, aid, pid))
+                         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 0)""",
+                      (int(car_id), expense_type, float(amount), float(litr), description, entered_by, did, aid, pid, expense_datetime))
         conn.commit()
     finally: conn.close()
 
@@ -274,6 +415,170 @@ def get_dashboard_data():
                 })
             return data
     finally: conn.close()
+
+
+
+def get_management_counts(table_name, id_field):
+    """Kart görünüşü üçün xərcləri və toplamları hesablayır."""
+    conn = get_connection_safe()
+    try:
+        with conn.cursor() as c:
+            if table_name == 'cars':
+                c.execute("""
+                    SELECT c.*, d.name AS driver_name, a.name AS assistant_name, p.name AS planner_name,
+                           COUNT(e.id) AS expense_count, COALESCE(SUM(e.amount),0) AS total_amount
+                    FROM cars c
+                    LEFT JOIN drivers d ON c.driver_id=d.id
+                    LEFT JOIN assistants a ON c.assistant_id=a.id
+                    LEFT JOIN planners p ON c.planner_id=p.id
+                    LEFT JOIN expenses e ON e.car_id=c.id AND e.is_deleted=0
+                    WHERE (c.is_deleted=0 OR c.is_deleted IS NULL)
+                    GROUP BY c.id
+                    ORDER BY c.car_number
+                """)
+            elif table_name == 'drivers':
+                c.execute("""
+                    SELECT d.*,
+                           (SELECT COUNT(*) FROM expenses e WHERE e.driver_id_at_expense=d.id AND e.is_deleted=0) AS expense_count,
+                           (SELECT COALESCE(SUM(e.amount),0) FROM expenses e WHERE e.driver_id_at_expense=d.id AND e.is_deleted=0) AS total_amount,
+                           (SELECT COUNT(*) FROM cars c2 WHERE c2.driver_id=d.id AND (c2.is_deleted=0 OR c2.is_deleted IS NULL)) AS car_count
+                    FROM drivers d
+                    WHERE d.is_deleted=0
+                    ORDER BY d.name
+                """)
+            elif table_name == 'assistants':
+                c.execute("""
+                    SELECT a.*,
+                           (SELECT COUNT(*) FROM expenses e WHERE e.assistant_id_at_expense=a.id AND e.is_deleted=0) AS expense_count,
+                           (SELECT COALESCE(SUM(e.amount),0) FROM expenses e WHERE e.assistant_id_at_expense=a.id AND e.is_deleted=0) AS total_amount,
+                           (SELECT COUNT(*) FROM cars c2 WHERE c2.assistant_id=a.id AND (c2.is_deleted=0 OR c2.is_deleted IS NULL)) AS car_count
+                    FROM assistants a
+                    WHERE a.is_deleted=0
+                    ORDER BY a.name
+                """)
+            elif table_name == 'planners':
+                c.execute("""
+                    SELECT p.*,
+                           (SELECT COUNT(*) FROM expenses e WHERE e.planner_id_at_expense=p.id AND e.is_deleted=0) AS expense_count,
+                           (SELECT COALESCE(SUM(e.amount),0) FROM expenses e WHERE e.planner_id_at_expense=p.id AND e.is_deleted=0) AS total_amount,
+                           (SELECT COUNT(*) FROM cars c2 WHERE c2.planner_id=p.id AND (c2.is_deleted=0 OR c2.is_deleted IS NULL)) AS car_count
+                    FROM planners p
+                    WHERE p.is_deleted=0
+                    ORDER BY p.name
+                """)
+            else:
+                return []
+            return c.fetchall()
+    finally:
+        conn.close()
+
+
+def get_entity_report(entity_type, entity_id, page=1, per_page=100):
+    """Maşın/sürücü/köməkçi/planlamaçı/operator üçün detallı xərc info səhifəsi."""
+    entity_id = int(entity_id)
+    page = max(int(page or 1), 1)
+    per_page = max(min(int(per_page or 100), 200), 20)
+    offset = (page - 1) * per_page
+
+    conn = get_connection_safe()
+    try:
+        with conn.cursor() as c:
+            entity = None
+            icon = 'fa-circle-info'
+            title = 'Məlumat'
+            subtitle = ''
+            where = ''
+            params = []
+
+            if entity_type == 'car':
+                c.execute("""SELECT c.*, d.name AS driver_name, a.name AS assistant_name, p.name AS planner_name
+                             FROM cars c
+                             LEFT JOIN drivers d ON c.driver_id=d.id
+                             LEFT JOIN assistants a ON c.assistant_id=a.id
+                             LEFT JOIN planners p ON c.planner_id=p.id
+                             WHERE c.id=%s""", (entity_id,))
+                entity = c.fetchone(); icon='fa-car-side'; title='Avtomobil məlumatı'; subtitle=(entity or {}).get('car_number','')
+                where = 'e.car_id=%s'; params=[entity_id]
+            elif entity_type == 'driver':
+                c.execute("SELECT * FROM drivers WHERE id=%s", (entity_id,))
+                entity = c.fetchone(); icon='fa-id-card'; title='Sürücü məlumatı'; subtitle=(entity or {}).get('name','')
+                where = 'e.driver_id_at_expense=%s'; params=[entity_id]
+            elif entity_type == 'assistant':
+                c.execute("SELECT * FROM assistants WHERE id=%s", (entity_id,))
+                entity = c.fetchone(); icon='fa-user-friends'; title='Köməkçi məlumatı'; subtitle=(entity or {}).get('name','')
+                where = 'e.assistant_id_at_expense=%s'; params=[entity_id]
+            elif entity_type == 'planner':
+                c.execute("SELECT * FROM planners WHERE id=%s", (entity_id,))
+                entity = c.fetchone(); icon='fa-user-tie'; title='Planlamaçı məlumatı'; subtitle=(entity or {}).get('name','')
+                where = 'e.planner_id_at_expense=%s'; params=[entity_id]
+            elif entity_type == 'operator':
+                c.execute("SELECT * FROM users WHERE id=%s", (entity_id,))
+                entity = c.fetchone(); icon='fa-user-gear'; title='Operator məlumatı'; subtitle=(entity or {}).get('fullname','')
+                where = 'e.entered_by=%s'; params=[(entity or {}).get('username','')]
+            else:
+                return None
+
+            if not entity:
+                return None
+
+            c.execute(f"""SELECT COUNT(*) AS c,
+                                COALESCE(SUM(e.amount),0) AS total_amount,
+                                COALESCE(SUM(e.litr),0) AS fuel_litr
+                         FROM expenses e
+                         WHERE e.is_deleted=0 AND {where}""", tuple(params))
+            summary = c.fetchone() or {}
+            total_count = int(summary.get('c') or 0)
+            total_amount = float(summary.get('total_amount') or 0)
+            fuel_litr = float(summary.get('fuel_litr') or 0)
+
+            c.execute(f"""
+                SELECT e.*, c.car_number, c.model,
+                       d.name AS driver_name, a.name AS assistant_name, p.name AS planner_name,
+                       u.fullname AS user_fullname
+                FROM expenses e
+                LEFT JOIN cars c ON e.car_id=c.id
+                LEFT JOIN drivers d ON e.driver_id_at_expense=d.id
+                LEFT JOIN assistants a ON e.assistant_id_at_expense=a.id
+                LEFT JOIN planners p ON e.planner_id_at_expense=p.id
+                LEFT JOIN users u ON e.entered_by = u.username COLLATE utf8mb4_unicode_ci
+                WHERE e.is_deleted=0 AND {where}
+                ORDER BY e.created_at DESC
+                LIMIT %s OFFSET %s
+            """, tuple(params + [per_page, offset]))
+            rows = c.fetchall()
+
+            expenses = []
+            for r in rows:
+                sub, clean = parse_expense_description(r.get('description',''))
+                r['subtype'] = sub
+                r['clean_description'] = clean
+                r['timestamp_str'] = r['created_at'].strftime('%d.%m.%Y %H:%M') if r.get('created_at') else '-'
+                expenses.append(r)
+
+            total_pages = max((total_count + per_page - 1) // per_page, 1)
+            return {
+                'entity_type': entity_type,
+                'entity': entity,
+                'title': title,
+                'subtitle': subtitle,
+                'icon': icon,
+                'expenses': expenses,
+                'total_amount': total_amount,
+                'expense_count': total_count,
+                'fuel_litr': fuel_litr,
+                'pagination': {
+                    'page': page,
+                    'per_page': per_page,
+                    'total': total_count,
+                    'pages': total_pages,
+                    'has_prev': page > 1,
+                    'has_next': page < total_pages,
+                    'prev_page': max(page - 1, 1),
+                    'next_page': min(page + 1, total_pages)
+                }
+            }
+    finally:
+        conn.close()
 
 def calculate_experience(start_date_input):
     if not start_date_input: return "-"
@@ -349,16 +654,78 @@ def index():
                 c.execute("SELECT COUNT(*) as c FROM drivers WHERE is_deleted=0"); dr_c = c.fetchone()['c']
                 c.execute("SELECT COUNT(*) as c FROM assistants WHERE is_deleted=0"); as_c = c.fetchone()['c']
                 c.execute("SELECT COUNT(*) as c FROM planners WHERE is_deleted=0"); pl_c = c.fetchone()['c']
+
                 now = datetime.now()
                 c.execute("SELECT SUM(amount) as total FROM expenses WHERE is_deleted=0 AND MONTH(created_at)=%s AND YEAR(created_at)=%s", (now.month, now.year))
                 res = c.fetchone()
                 mt = float(res['total'] or 0)
+
+                prev = now - relativedelta(months=1)
+                c.execute("SELECT SUM(amount) as total FROM expenses WHERE is_deleted=0 AND MONTH(created_at)=%s AND YEAR(created_at)=%s", (prev.month, prev.year))
+                prev_total = float((c.fetchone() or {}).get('total') or 0)
+
+                months = []
+                for i in range(11, -1, -1):
+                    d = now - relativedelta(months=i)
+                    months.append({
+                        'year': d.year,
+                        'month': d.month,
+                        'key': f"{d.year}-{d.month:02d}",
+                        'label': d.strftime('%b %Y')
+                    })
+
+                c.execute("""
+                    SELECT YEAR(created_at) AS y, MONTH(created_at) AS m, SUM(amount) AS total
+                    FROM expenses
+                    WHERE is_deleted=0 AND created_at >= %s
+                    GROUP BY YEAR(created_at), MONTH(created_at)
+                    ORDER BY y, m
+                """, ((now - relativedelta(months=11)).strftime('%Y-%m-01 00:00:00'),))
+                raw_months = c.fetchall()
+                month_map = {f"{int(r['y'])}-{int(r['m']):02d}": float(r['total'] or 0) for r in raw_months}
+                trend_labels = [m['label'] for m in months]
+                trend_data = [month_map.get(m['key'], 0) for m in months]
+
                 c.execute("SELECT type, SUM(amount) as total FROM expenses WHERE is_deleted=0 AND MONTH(created_at)=%s AND YEAR(created_at)=%s GROUP BY type", (now.month, now.year))
                 rows = c.fetchall()
-        finally: conn.close()
-        return render_template('admin_dashboard.html', stats={'operator_count': op_c, 'car_count': car_c, 'driver_count': dr_c, 'assistant_count': as_c, 'planner_count': pl_c, 'monthly_total': mt}, chart_data={'labels': [r['type'] for r in rows], 'data': [float(r['total']) for r in rows]})
-    
-    return render_template('operator_dashboard.html', cars=get_dashboard_data(), drivers=get_all_drivers(True), assistants=get_all_assistants(True), planners=get_all_planners(True), fine_types=FINE_TYPES, repair_types=REPAIR_TYPES)
+        finally:
+            conn.close()
+
+        delta = mt - prev_total
+        delta_percent = ((delta / prev_total) * 100) if prev_total else (100 if mt else 0)
+        return render_template(
+            'admin_dashboard.html',
+            stats={
+                'operator_count': op_c,
+                'car_count': car_c,
+                'driver_count': dr_c,
+                'assistant_count': as_c,
+                'planner_count': pl_c,
+                'monthly_total': mt,
+                'previous_month_total': prev_total,
+                'monthly_delta': delta,
+                'monthly_delta_percent': delta_percent
+            },
+            chart_data={'labels': [r['type'] for r in rows], 'data': [float(r['total']) for r in rows]},
+            monthly_trend={'labels': trend_labels, 'data': trend_data}
+        )
+
+    now = datetime.now()
+    return render_template(
+        'operator_dashboard.html',
+        cars=get_dashboard_data(),
+        drivers=get_all_drivers(True),
+        assistants=get_all_assistants(True),
+        planners=get_all_planners(True),
+        fine_types=get_expense_subtypes().get('Cərimə', FINE_TYPES),
+        repair_types=get_expense_subtypes().get('Təmir', REPAIR_TYPES),
+        expense_types=get_expense_types(),
+        expense_subtypes=get_expense_subtypes(),
+        allow_past_expense_date=is_past_expense_allowed(),
+        default_expense_datetime=now.strftime('%Y-%m-%dT%H:%M'),
+        today_start_datetime=now.strftime('%Y-%m-%dT00:00'),
+        today_display=now.strftime('%d.%m.%Y')
+    )
 
 @app.route('/add_expense', methods=['POST'])
 @operator_required
@@ -366,12 +733,23 @@ def add_expense():
     try:
         desc = request.form.get('description', '')
         et = request.form.get('expense_type')
-        sub = request.form.get('fuel_subtype') if et=='Yanacaq' else (request.form.get('fine_subtype') if et=='Cərimə' else (request.form.get('repair_subtype') if et=='Təmir' else ''))
+        expense_dt = parse_expense_datetime(request.form.get('expense_date'))
+        now = datetime.now()
+
+        if expense_dt > now + timedelta(minutes=2):
+            flash('Gələcək tarixə xərc yazmaq olmaz.', 'danger')
+            return redirect(url_for('index'))
+
+        if session.get('role') == 'user' and expense_dt.date() < now.date() and not is_past_expense_allowed():
+            flash('Keçmiş tarixə xərc yazmaq üçün admin icazəsi bağlıdır.', 'danger')
+            return redirect(url_for('index'))
+
+        sub = request.form.get('expense_subtype') or (request.form.get('fuel_subtype') if et=='Yanacaq' else (request.form.get('fine_subtype') if et=='Cərimə' else (request.form.get('repair_subtype') if et=='Təmir' else '')))
         if sub: desc = f"[{sub}] {desc}"
         car = get_car_by_id(request.form.get('car_id'))
         if car:
-            insert_expense(car['id'], et, request.form.get('amount'), request.form.get('litr') or 0, desc, car['driver_id'], car['assistant_id'], car['planner_id'], session['user'])
-            log_action('ADD_EXPENSE', f"{car['car_number']} - {request.form.get('amount')} AZN")
+            insert_expense(car['id'], et, request.form.get('amount'), request.form.get('litr') or 0, desc, car['driver_id'], car['assistant_id'], car['planner_id'], session['user'], expense_dt)
+            log_action('ADD_EXPENSE', f"{car['car_number']} - {request.form.get('amount')} AZN - Xərc tarixi: {expense_dt.strftime('%d.%m.%Y %H:%M')}")
             flash('Xərc əlavə edildi.', 'success')
     except Exception as e: flash(f'Xəta: {e}', 'danger')
     return redirect(url_for('index'))
@@ -455,7 +833,7 @@ def admin_reports():
     if session.get('role') not in ['admin', 'supervisor']: return redirect(url_for('index'))
     
     try:
-        f_car = request.args.get('car_id'); f_dr = request.args.get('driver_id'); f_t = request.args.get('expense_type'); f_sub = request.args.get('subtype_filter')
+        f_car = request.args.get('car_id'); f_dr = request.args.get('driver_id'); f_as = request.args.get('assistant_id'); f_pl = request.args.get('planner_id'); f_op = request.args.get('operator_id'); f_t = request.args.get('expense_type'); f_sub = request.args.get('subtype_filter')
         
         today_str = datetime.now().strftime('%Y-%m-%d')
         ten_days_ago_str = (datetime.now() - timedelta(days=10)).strftime('%Y-%m-%d')
@@ -478,6 +856,10 @@ def admin_reports():
         p = []
         if f_car: sql += " AND e.car_id=%s"; p.append(f_car)
         if f_dr: sql += " AND e.driver_id_at_expense=%s"; p.append(f_dr)
+        if f_as: sql += " AND e.assistant_id_at_expense=%s"; p.append(f_as)
+        if f_pl: sql += " AND e.planner_id_at_expense=%s"; p.append(f_pl)
+        if f_op:
+            sql += " AND e.entered_by=(SELECT username FROM users WHERE id=%s)"; p.append(f_op)
         if f_t: sql += " AND e.type=%s"; p.append(f_t)
         if f_sub: sql += " AND e.description LIKE %s"; p.append(f"%[{f_sub}]%")
         
@@ -531,7 +913,7 @@ def admin_reports():
         current_filters = request.args.copy()
         if not request.args.get('start_date'): current_filters['start_date'] = sd
         
-        return render_template('admin_reports.html', reports=fmt_reports, total_amount=total, cars=cars, drivers=drivers, assistants=assts, planners=plans, operators=ops, expense_types=EXPENSE_TYPES, fine_types=FINE_TYPES, repair_types=REPAIR_TYPES, selected_filters=current_filters)
+        return render_template('admin_reports.html', reports=fmt_reports, total_amount=total, cars=cars, drivers=drivers, assistants=assts, planners=plans, operators=ops, expense_types=get_expense_types(), fine_types=get_expense_subtypes().get('Cərimə', FINE_TYPES), repair_types=get_expense_subtypes().get('Təmir', REPAIR_TYPES), expense_subtypes=get_expense_subtypes(), all_subtypes=get_all_subtype_values(), selected_filters=current_filters)
     except Exception:
         return f"<h1>SİSTEM XƏTASI (DEBUG)</h1><pre>{traceback.format_exc()}</pre>"
 @app.route('/admin/reports/export')
@@ -539,7 +921,7 @@ def admin_reports_export():
     if session.get('role') not in ['admin', 'supervisor']: return redirect(url_for('index'))
     
     # Filtrləri alırıq (Axtarışda nə seçilibsə, onu Excel-ə çəkəcək)
-    f_car = request.args.get('car_id'); f_dr = request.args.get('driver_id'); f_t = request.args.get('expense_type'); f_sub = request.args.get('subtype_filter')
+    f_car = request.args.get('car_id'); f_dr = request.args.get('driver_id'); f_as = request.args.get('assistant_id'); f_pl = request.args.get('planner_id'); f_op = request.args.get('operator_id'); f_t = request.args.get('expense_type'); f_sub = request.args.get('subtype_filter')
     sd = request.args.get('start_date')
     ed = request.args.get('end_date')
     
@@ -556,6 +938,10 @@ def admin_reports_export():
     
     if f_car: sql += " AND e.car_id=%s"; p.append(f_car)
     if f_dr: sql += " AND e.driver_id_at_expense=%s"; p.append(f_dr)
+    if f_as: sql += " AND e.assistant_id_at_expense=%s"; p.append(f_as)
+    if f_pl: sql += " AND e.planner_id_at_expense=%s"; p.append(f_pl)
+    if f_op:
+        sql += " AND e.entered_by=(SELECT username FROM users WHERE id=%s)"; p.append(f_op)
     if f_t: sql += " AND e.type=%s"; p.append(f_t)
     if f_sub: sql += " AND e.description LIKE %s"; p.append(f"%[{f_sub}]%")
     if sd: sql += " AND DATE(e.created_at) >= %s"; p.append(sd)
@@ -625,10 +1011,16 @@ def delete_expense(id):
 @app.route('/admin/deleted_reports')
 @admin_required
 def admin_deleted_reports():
+    page = request.args.get('page', 1, type=int) or 1
+    per_page = 100
+    offset = (max(page, 1) - 1) * per_page
+
     conn = get_connection_safe()
     try:
         with conn.cursor() as c:
-            # FIX: Added e.id as expense_id, COLLATES, and full JOINs
+            c.execute("SELECT COUNT(*) AS c FROM expenses WHERE is_deleted=1")
+            total = int((c.fetchone() or {}).get('c') or 0)
+
             c.execute("""SELECT e.*, e.id as expense_id, e.created_at as timestamp, c.car_number, c.model, u.fullname as user_fullname, 
                          d.name as driver_name_at_expense, a.name as assistant_name_at_expense, p.name as planner_name_at_expense
                          FROM expenses e 
@@ -637,7 +1029,8 @@ def admin_deleted_reports():
                          LEFT JOIN drivers d ON e.driver_id_at_expense=d.id 
                          LEFT JOIN assistants a ON e.assistant_id_at_expense=a.id 
                          LEFT JOIN planners p ON e.planner_id_at_expense=p.id
-                         WHERE e.is_deleted=1 ORDER BY e.deleted_at DESC""")
+                         WHERE e.is_deleted=1 ORDER BY e.deleted_at DESC
+                         LIMIT %s OFFSET %s""", (per_page, offset))
             rows = c.fetchall()
             rep = []
             for r in rows:
@@ -645,9 +1038,9 @@ def admin_deleted_reports():
                     r['timestamp'] = datetime.now()
                 else:
                     r['timestamp'] = r['created_at']
-                
+
                 sub, clean = parse_expense_description(r.get('description', ''))
-                
+
                 item = {
                     'expense': r, 
                     'car': {'car_number': r['car_number'], 'model': r.get('model')} if r.get('car_number') else None, 
@@ -660,8 +1053,21 @@ def admin_deleted_reports():
                     'clean_description': clean
                 }
                 rep.append(item)
-    finally: conn.close()
-    return render_template('admin_deleted_reports.html', reports=rep)
+    finally:
+        conn.close()
+
+    total_pages = max((total + per_page - 1) // per_page, 1)
+    pagination = {
+        'page': max(page, 1),
+        'per_page': per_page,
+        'total': total,
+        'pages': total_pages,
+        'has_prev': page > 1,
+        'has_next': page < total_pages,
+        'prev_page': max(page - 1, 1),
+        'next_page': min(page + 1, total_pages)
+    }
+    return render_template('admin_deleted_reports.html', reports=rep, pagination=pagination)
 
 @app.route('/admin/expense/restore/<int:id>', methods=['POST'])
 @admin_required
@@ -692,21 +1098,52 @@ def supervisor_dashboard():
 @app.route('/supervisor/reports')
 @supervisor_required
 def supervisor_reports():
-    u = request.args.get('username'); a = request.args.get('action'); sd = request.args.get('start_date')
-    sql = "SELECT * FROM audit_logs WHERE 1=1"
+    u = request.args.get('username')
+    a = request.args.get('action')
+    h = request.args.get('hostname')
+    sd = request.args.get('start_date')
+    page = request.args.get('page', 1, type=int) or 1
+    per_page = 100
+    offset = (max(page, 1) - 1) * per_page
+
+    sql = " FROM audit_logs WHERE 1=1"
     p = []
-    if u: sql+=" AND username=%s"; p.append(u)
-    if a: sql+=" AND action=%s"; p.append(a)
-    if sd: sql+=" AND DATE(timestamp)>=%s"; p.append(sd)
+    if u:
+        sql += " AND username=%s"; p.append(u)
+    if a:
+        sql += " AND action=%s"; p.append(a)
+    if h:
+        sql += " AND hostname=%s"; p.append(h)
+    if sd:
+        sql += " AND DATE(timestamp)>=%s"; p.append(sd)
+
     conn = get_connection_safe()
     try:
         with conn.cursor() as c:
-            c.execute(sql+" ORDER BY timestamp DESC LIMIT 500", tuple(p)); r = c.fetchall()
-            c.execute("SELECT DISTINCT username FROM audit_logs"); au = [x['username'] for x in c.fetchall()]
-            c.execute("SELECT DISTINCT action FROM audit_logs"); aa = [x['action'] for x in c.fetchall()]
-            c.execute("SELECT DISTINCT hostname FROM audit_logs"); ah = [x['hostname'] for x in c.fetchall()]
-    finally: conn.close()
-    return render_template('supervisor_reports.html', reports=r, all_usernames=au, all_actions=aa, all_hostnames=ah, selected_filters=request.args)
+            c.execute("SELECT COUNT(*) AS c" + sql, tuple(p))
+            total = int((c.fetchone() or {}).get('c') or 0)
+
+            c.execute("SELECT *" + sql + " ORDER BY timestamp DESC LIMIT %s OFFSET %s", tuple(p + [per_page, offset]))
+            r = c.fetchall()
+
+            c.execute("SELECT DISTINCT username FROM audit_logs ORDER BY username"); au = [x['username'] for x in c.fetchall()]
+            c.execute("SELECT DISTINCT action FROM audit_logs ORDER BY action"); aa = [x['action'] for x in c.fetchall()]
+            c.execute("SELECT DISTINCT hostname FROM audit_logs ORDER BY hostname"); ah = [x['hostname'] for x in c.fetchall()]
+    finally:
+        conn.close()
+
+    total_pages = max((total + per_page - 1) // per_page, 1)
+    pagination = {
+        'page': max(page, 1),
+        'per_page': per_page,
+        'total': total,
+        'pages': total_pages,
+        'has_prev': page > 1,
+        'has_next': page < total_pages,
+        'prev_page': max(page - 1, 1),
+        'next_page': min(page + 1, total_pages)
+    }
+    return render_template('supervisor_reports.html', reports=r, all_usernames=au, all_actions=aa, all_hostnames=ah, selected_filters=request.args, pagination=pagination)
 
 @app.route('/supervisor/data')
 @supervisor_required
@@ -715,7 +1152,7 @@ def supervisor_data(): return render_template('supervisor_data.html')
 @app.route('/supervisor/export')
 @supervisor_required
 def export_db():
-    tabs = ['users', 'cars', 'drivers', 'assistants', 'planners', 'expenses', 'expense_types', 'audit_logs']
+    tabs = ['users', 'cars', 'drivers', 'assistants', 'planners', 'expenses', 'expense_types', 'audit_logs', 'app_settings']
     d = {}
     conn = get_connection_safe()
     try:
@@ -735,12 +1172,12 @@ def import_db():
         try:
             with conn.cursor() as c:
                 c.execute("SET FOREIGN_KEY_CHECKS=0")
-                for t in ['users', 'cars', 'drivers', 'assistants', 'planners', 'expenses', 'expense_types', 'audit_logs']:
+                for t in ['users', 'cars', 'drivers', 'assistants', 'planners', 'expenses', 'expense_types', 'audit_logs', 'app_settings']:
                     if t in d and d[t]:
                         c.execute(f"TRUNCATE TABLE {t}")
                         for row in d[t]:
                             cols = ', '.join(row.keys()); ph = ', '.join(['%s']*len(row))
-                            c.execute(f"INSERT INTO {t} ({columns}) VALUES ({ph})", list(row.values()))
+                            c.execute(f"INSERT INTO {t} ({cols}) VALUES ({ph})", list(row.values()))
                 c.execute("SET FOREIGN_KEY_CHECKS=1")
             conn.commit(); flash('Bərpa olundu', 'success')
         finally: conn.close()
@@ -808,13 +1245,10 @@ def supervisor_delete_user(id):
 @app.route('/admin/drivers')
 @operator_required
 def admin_drivers():
-    conn = get_connection_safe()
-    try:
-        with conn.cursor() as c:
-            c.execute("SELECT * FROM drivers WHERE is_deleted=0 ORDER BY name"); drs = c.fetchall()
-            for d in drs: d['experience_str'] = calculate_experience(d.get('start_date'))
-            return render_template('admin_drivers.html', drivers=drs)
-    finally: conn.close()
+    drs = get_management_counts('drivers', 'id')
+    for d in drs:
+        d['experience_str'] = calculate_experience(d.get('start_date'))
+    return render_template('admin_drivers.html', drivers=drs)
 
 @app.route('/admin/drivers/add', methods=['POST'])
 @operator_required
@@ -906,7 +1340,7 @@ def bulk_add_driver():
 
 @app.route('/admin/cars')
 @operator_required
-def admin_cars(): return render_template('admin_cars.html', cars=get_all_cars(), drivers=get_all_drivers(True), assistants=get_all_assistants(True), planners=get_all_planners(True))
+def admin_cars(): return render_template('admin_cars.html', cars=get_management_counts('cars', 'id'), drivers=get_all_drivers(True), assistants=get_all_assistants(True), planners=get_all_planners(True))
 
 @app.route('/admin/cars/add', methods=['POST'])
 @operator_required
@@ -939,9 +1373,19 @@ def edit_car(id):
 @app.route('/admin/car/delete/<int:id>', methods=['POST'])
 @operator_required
 def delete_car(id):
-    conn = get_connection_safe(); 
-    with conn.cursor() as c: c.execute("UPDATE cars SET is_deleted=1 WHERE id=%s", (id,)); conn.commit()
-    conn.close(); return redirect(url_for('admin_cars'))
+    conn = get_connection_safe()
+    try:
+        with conn.cursor() as c:
+            c.execute("SELECT COUNT(*) AS c FROM expenses WHERE car_id=%s AND is_deleted=0", (id,))
+            if c.fetchone()['c'] > 0:
+                flash('Bu avtomobilə xərc yazıldığı üçün silmək olmaz. Əvvəlcə info bölməsindən tarixçəyə baxın.', 'warning')
+                return redirect(url_for('admin_cars'))
+            c.execute("UPDATE cars SET is_deleted=1 WHERE id=%s", (id,))
+            conn.commit()
+            flash('Avtomobil silindi.', 'success')
+    finally:
+        conn.close()
+    return redirect(url_for('admin_cars'))
 
 @app.route('/admin/cars/bulk_add', methods=['POST'])
 @operator_required
@@ -961,7 +1405,7 @@ def bulk_add_car():
 
 @app.route('/admin/assistants')
 @operator_required
-def admin_assistants(): return render_template('admin_assistants.html', assistants=get_all_assistants())
+def admin_assistants(): return render_template('admin_assistants.html', assistants=get_management_counts('assistants', 'id'))
 @app.route('/admin/assistants/add', methods=['POST'])
 @operator_required
 def add_assistant(): conn=get_connection_safe(); conn.cursor().execute("INSERT INTO assistants (name, is_active, is_deleted) VALUES (%s, 1, 0)", (request.form['name'],)); conn.commit(); conn.close(); return redirect(url_for('admin_assistants'))
@@ -985,7 +1429,7 @@ def bulk_add_assistant():
 
 @app.route('/admin/planners')
 @operator_required
-def admin_planners(): return render_template('admin_planners.html', planners=get_all_planners())
+def admin_planners(): return render_template('admin_planners.html', planners=get_management_counts('planners', 'id'))
 @app.route('/admin/planners/add', methods=['POST'])
 @operator_required
 def add_planner(): conn=get_connection_safe(); conn.cursor().execute("INSERT INTO planners (name, is_active, is_deleted) VALUES (%s, 1, 0)", (request.form['name'],)); conn.commit(); conn.close(); return redirect(url_for('admin_planners'))
@@ -1007,9 +1451,59 @@ def bulk_add_planner():
     for l in request.form.get('bulk_data','').splitlines(): c.execute("INSERT INTO planners (name, is_active, is_deleted) VALUES (%s, 1, 0)", (l.strip(),))
     conn.commit(); conn.close(); return redirect(url_for('admin_planners'))
 
+
+@app.route('/admin/info/<entity_type>/<int:entity_id>')
+@operator_required
+def entity_info(entity_type, entity_id):
+    page = request.args.get('page', 1, type=int)
+    report = get_entity_report(entity_type, entity_id, page=page, per_page=100)
+    if not report:
+        flash('Məlumat tapılmadı.', 'warning')
+        return redirect(url_for('index'))
+    return render_template('entity_info.html', report=report)
+
+@app.route('/admin/settings', methods=['GET', 'POST'])
+@role_required(['admin', 'supervisor'])
+def admin_settings():
+    if request.method == 'POST':
+        allow_past = '1' if request.form.get('allow_past_expense_date') == 'on' else '0'
+        set_setting('allow_past_expense_date', allow_past)
+
+        expense_types = _clean_lines(request.form.get('expense_types_text', ''))
+        if not expense_types:
+            expense_types = EXPENSE_TYPES
+        subtype_map = parse_subtype_settings(request.form.get('expense_subtypes_text', ''), expense_types)
+
+        set_setting('expense_types_json', json.dumps(expense_types, ensure_ascii=False))
+        set_setting('expense_subtypes_json', json.dumps(subtype_map, ensure_ascii=False))
+
+        status_text = 'AÇIQ' if allow_past == '1' else 'BAĞLI'
+        log_action('UPDATE_SETTINGS', f"Sistem ayarları yeniləndi. Keçmiş tarix: {status_text}. Xərc növləri: {len(expense_types)}")
+        flash('Sistem ayarları yadda saxlandı.', 'success')
+        return redirect(url_for('admin_settings'))
+
+    expense_types = get_expense_types()
+    expense_subtypes = get_expense_subtypes()
+    subtype_lines = []
+    for t in expense_types:
+        vals = expense_subtypes.get(t, [])
+        subtype_lines.append(f"{t}: {', '.join(vals)}" if vals else f"{t}:")
+    return render_template(
+        'admin_settings.html',
+        allow_past_expense_date=is_past_expense_allowed(),
+        expense_types_text='\n'.join(expense_types),
+        expense_subtypes_text='\n'.join(subtype_lines),
+        expense_types=expense_types,
+        expense_subtypes=expense_subtypes
+    )
+
 @app.route('/admin/users')
-@admin_required
-def admin_users(): return render_template('admin_users.html', users=get_operators())
+@login_required
+def admin_users():
+    if session.get('role') not in ['admin', 'supervisor']:
+        flash('İcazə yoxdur.', 'danger')
+        return redirect(url_for('index'))
+    return render_template('admin_users.html', users=get_operators())
 @app.route('/admin/users/add', methods=['POST'])
 @admin_required
 def add_user(): conn=get_connection_safe(); conn.cursor().execute("INSERT INTO users (fullname, username, password, role) VALUES (%s, %s, %s, %s)", (request.form['fullname'], request.form['username'], request.form['password'], request.form['role'])); conn.commit(); conn.close(); return redirect(url_for('admin_users'))

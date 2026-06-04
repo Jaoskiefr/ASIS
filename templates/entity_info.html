@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="az">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ASİS • Info</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/asis-modern.css') }}">
+</head>
+<body class="asis-app">
+{% if session['role'] == 'supervisor' %}
+  {% include 'supervisor_navbar.html' %}
+{% elif session['role'] == 'admin' %}
+  {% include 'admin_navbar.html' %}
+{% else %}
+  {% include 'operator_navbar.html' %}
+{% endif %}
+
+<div class="container-fluid mt-4 content-container">
+  <div class="asis-page-hero mb-4">
+    <div>
+      <div class="asis-page-kicker">Detallı məlumat</div>
+      <h1 class="asis-page-title"><i class="fas {{ report.icon }} text-primary"></i> {{ report.title }}</h1>
+      <p class="asis-page-description">{{ report.subtitle or 'Seçilmiş obyekt üzrə indiyə qədər yazılmış bütün xərclər, əlaqəli şəxslər və əməliyyat tarixçəsi.' }}</p>
+    </div>
+    <div class="d-flex gap-2 flex-wrap justify-content-end">
+      <a class="btn btn-light border" href="javascript:history.back()"><i class="fas fa-arrow-left me-1"></i> Geri</a>
+      {% if report.entity_type == 'car' %}
+        <a class="btn btn-warning" href="{{ url_for('edit_car', id=report.entity.id) }}"><i class="fas fa-edit me-1"></i> Redaktə</a>
+        <form method="POST" action="{{ url_for('toggle_car_status', id=report.entity.id) }}" class="d-inline"><button class="btn btn-outline-secondary"><i class="fas fa-power-off me-1"></i>{% if report.entity.is_active %}Passiv et{% else %}Aktiv et{% endif %}</button></form>
+        <form method="POST" action="{{ url_for('delete_car', id=report.entity.id) }}" class="d-inline" onsubmit="return confirm('Silməyə əminsiniz?')"><button class="btn btn-outline-danger"><i class="fas fa-trash-alt me-1"></i> Sil</button></form>
+      {% elif report.entity_type == 'driver' %}
+        <a class="btn btn-warning" href="{{ url_for('edit_driver', id=report.entity.id) }}"><i class="fas fa-edit me-1"></i> Redaktə</a>
+        <form method="POST" action="{{ url_for('toggle_driver_status', id=report.entity.id) }}" class="d-inline"><button class="btn btn-outline-secondary"><i class="fas fa-power-off me-1"></i>{% if report.entity.is_active %}Passiv et{% else %}Aktiv et{% endif %}</button></form>
+        <form method="POST" action="{{ url_for('delete_driver', id=report.entity.id) }}" class="d-inline" onsubmit="return confirm('Silməyə əminsiniz?')"><button class="btn btn-outline-danger"><i class="fas fa-trash-alt me-1"></i> Sil</button></form>
+      {% elif report.entity_type == 'assistant' %}
+        <a class="btn btn-warning" href="{{ url_for('edit_assistant', aid=report.entity.id) }}"><i class="fas fa-edit me-1"></i> Redaktə</a>
+        <form method="POST" action="{{ url_for('toggle_assistant_status', id=report.entity.id) }}" class="d-inline"><button class="btn btn-outline-secondary"><i class="fas fa-power-off me-1"></i>{% if report.entity.is_active %}Passiv et{% else %}Aktiv et{% endif %}</button></form>
+        <form method="POST" action="{{ url_for('delete_assistant', aid=report.entity.id) }}" class="d-inline" onsubmit="return confirm('Silməyə əminsiniz?')"><button class="btn btn-outline-danger"><i class="fas fa-trash-alt me-1"></i> Sil</button></form>
+      {% elif report.entity_type == 'planner' %}
+        <a class="btn btn-warning" href="{{ url_for('edit_planner', pid=report.entity.id) }}"><i class="fas fa-edit me-1"></i> Redaktə</a>
+        <form method="POST" action="{{ url_for('toggle_planner_status', id=report.entity.id) }}" class="d-inline"><button class="btn btn-outline-secondary"><i class="fas fa-power-off me-1"></i>{% if report.entity.is_active %}Passiv et{% else %}Aktiv et{% endif %}</button></form>
+        <form method="POST" action="{{ url_for('delete_planner', pid=report.entity.id) }}" class="d-inline" onsubmit="return confirm('Silməyə əminsiniz?')"><button class="btn btn-outline-danger"><i class="fas fa-trash-alt me-1"></i> Sil</button></form>
+      {% elif report.entity_type == 'operator' %}
+        <a class="btn btn-primary" href="{{ url_for('admin_users') }}"><i class="fas fa-users-gear me-1"></i> Operatorlar</a>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="row g-3 mb-4">
+    <div class="col-xl-3 col-md-6"><div class="asis-summary-card"><div class="asis-summary-icon"><i class="fas fa-sack-dollar"></i></div><div><div class="asis-summary-label">Ümumi xərc</div><div class="asis-summary-value">{{ '%.2f'|format(report.total_amount or 0) }} <small>AZN</small></div></div></div></div>
+    <div class="col-xl-3 col-md-6"><div class="asis-summary-card"><div class="asis-summary-icon success"><i class="fas fa-list-check"></i></div><div><div class="asis-summary-label">Qeyd sayı</div><div class="asis-summary-value">{{ report.expense_count }}</div></div></div></div>
+    <div class="col-xl-3 col-md-6"><div class="asis-summary-card"><div class="asis-summary-icon warning"><i class="fas fa-gas-pump"></i></div><div><div class="asis-summary-label">Yanacaq litr</div><div class="asis-summary-value">{{ '%.2f'|format(report.fuel_litr or 0) }}</div></div></div></div>
+    <div class="col-xl-3 col-md-6"><div class="asis-summary-card"><div class="asis-summary-icon danger"><i class="fas fa-circle-info"></i></div><div><div class="asis-summary-label">Status</div><div class="asis-summary-value status-small">{% if report.entity.is_active is defined %}{% if report.entity.is_active %}Aktiv{% else %}Passiv{% endif %}{% else %}Məlumat{% endif %}</div></div></div></div>
+  </div>
+
+  <div class="row g-4">
+    <div class="col-xl-4">
+      <div class="asis-entity-profile-card h-100">
+        <div class="asis-entity-profile-head">
+          <div class="asis-entity-icon large"><i class="fas {{ report.icon }}"></i></div>
+          <div>
+            <h3>{{ report.subtitle or report.title }}</h3>
+            <p>{{ report.title }}</p>
+          </div>
+        </div>
+        <div class="asis-profile-grid">
+          {% if report.entity_type == 'car' %}
+            <div class="asis-profile-item"><span>Nömrə</span><strong>{{ report.entity.car_number }}</strong></div>
+            <div class="asis-profile-item"><span>Model</span><strong>{{ report.entity.model or '-' }}</strong></div>
+            <div class="asis-profile-item"><span>Sürücü</span><strong>{{ report.entity.driver_name or '-' }}</strong></div>
+            <div class="asis-profile-item"><span>Köməkçi</span><strong>{{ report.entity.assistant_name or '-' }}</strong></div>
+            <div class="asis-profile-item"><span>Planlamaçı</span><strong>{{ report.entity.planner_name or '-' }}</strong></div>
+            <div class="asis-profile-item"><span>Status</span><strong>{% if report.entity.is_active %}Aktiv{% else %}Passiv{% endif %}</strong></div>
+          {% elif report.entity_type == 'driver' %}
+            <div class="asis-profile-item"><span>Ad, soyad</span><strong>{{ report.entity.name }}</strong></div>
+            <div class="asis-profile-item"><span>Telefon</span><strong>{{ report.entity.phone or '-' }}</strong></div>
+            <div class="asis-profile-item"><span>Vəsiqə</span><strong>{{ report.entity.license_no or '-' }}</strong></div>
+            <div class="asis-profile-item"><span>Başlama tarixi</span><strong>{{ report.entity.start_date or '-' }}</strong></div>
+            <div class="asis-profile-item"><span>Status</span><strong>{% if report.entity.is_active %}Aktiv{% else %}Passiv{% endif %}</strong></div>
+          {% elif report.entity_type == 'assistant' or report.entity_type == 'planner' %}
+            <div class="asis-profile-item"><span>Ad, soyad</span><strong>{{ report.entity.name }}</strong></div>
+            <div class="asis-profile-item"><span>ID</span><strong>{{ report.entity.id }}</strong></div>
+            <div class="asis-profile-item"><span>Status</span><strong>{% if report.entity.is_active %}Aktiv{% else %}Passiv{% endif %}</strong></div>
+          {% elif report.entity_type == 'operator' %}
+            <div class="asis-profile-item"><span>Ad, soyad</span><strong>{{ report.entity.fullname }}</strong></div>
+            <div class="asis-profile-item"><span>Username</span><strong>{{ report.entity.username }}</strong></div>
+            <div class="asis-profile-item"><span>Rol</span><strong>{{ report.entity.role }}</strong></div>
+            <div class="asis-profile-item"><span>Status</span><strong>{% if report.entity.is_active %}Aktiv{% else %}Passiv{% endif %}</strong></div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+    <div class="col-xl-8">
+      <div class="card overflow-hidden asis-info-table-card h-100">
+        <div class="card-header d-flex justify-content-between align-items-center"><span><i class="fas fa-receipt me-2"></i> Xərc tarixçəsi</span><span class="badge bg-primary">{{ report.expense_count }} qeyd</span></div>
+        <div class="table-responsive asis-expense-table">
+          <table class="table table-hover align-middle">
+            <thead><tr><th>Tarix / Saat</th><th>Maşın</th><th>Sürücü</th><th>Köməkçi</th><th>Planlamaçı</th><th>Növ</th><th>Alt növ</th><th class="text-end">Məbləğ</th><th class="text-end">Litr</th><th>Açıqlama</th><th>Qeyd edən</th></tr></thead>
+            <tbody>
+            {% for e in report.expenses %}
+              <tr>
+                <td>{{ e.timestamp_str }}</td>
+                <td><span class="badge bg-dark">{{ e.car_number or '-' }}</span></td>
+                <td>{{ e.driver_name or '-' }}</td>
+                <td>{{ e.assistant_name or '-' }}</td>
+                <td>{{ e.planner_name or '-' }}</td>
+                <td><span class="badge bg-secondary">{{ e.type or '-' }}</span></td>
+                <td>{% if e.subtype and e.subtype != '-' %}<span class="badge bg-light text-dark border">{{ e.subtype }}</span>{% else %}<span class="text-muted">-</span>{% endif %}</td>
+                <td class="text-end fw-bold text-danger">{{ '%.2f'|format(e.amount or 0) }}</td>
+                <td class="text-end">{{ e.litr if e.litr and e.litr > 0 else '-' }}</td>
+                <td><small>{{ e.clean_description or '-' }}</small></td>
+                <td>{{ e.user_fullname or e.entered_by or '-' }}</td>
+              </tr>
+            {% else %}
+              <tr><td colspan="11" class="text-center text-muted py-5"><i class="fas fa-box-open fa-3x mb-3 opacity-50"></i><br>Bu seçim üzrə xərc tapılmadı.</td></tr>
+            {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% if report.pagination.pages > 1 %}
+        <div class="asis-pagination-wrap">
+          <div class="asis-pagination-info">
+            Səhifə {{ report.pagination.page }} / {{ report.pagination.pages }} · Cəmi {{ report.pagination.total }} qeyd · 100-100 göstərilir
+          </div>
+          <ul class="pagination asis-pagination">
+            <li class="page-item {% if not report.pagination.has_prev %}disabled{% endif %}">
+              <a class="page-link" href="{{ url_for('entity_info', entity_type=report.entity_type, entity_id=report.entity.id, page=report.pagination.prev_page) }}">‹</a>
+            </li>
+            {% for p in range(1, report.pagination.pages + 1) %}
+              {% if p == 1 or p == report.pagination.pages or (p >= report.pagination.page - 2 and p <= report.pagination.page + 2) %}
+                <li class="page-item {% if p == report.pagination.page %}active{% endif %}">
+                  <a class="page-link" href="{{ url_for('entity_info', entity_type=report.entity_type, entity_id=report.entity.id, page=p) }}">{{ p }}</a>
+                </li>
+              {% elif p == report.pagination.page - 3 or p == report.pagination.page + 3 %}
+                <li class="page-item disabled"><span class="page-link">...</span></li>
+              {% endif %}
+            {% endfor %}
+            <li class="page-item {% if not report.pagination.has_next %}disabled{% endif %}">
+              <a class="page-link" href="{{ url_for('entity_info', entity_type=report.entity_type, entity_id=report.entity.id, page=report.pagination.next_page) }}">›</a>
+            </li>
+          </ul>
+        </div>
+        {% endif %}
+
+      </div>
+    </div>
+  </div>
+</div>
+<div class="asis-footer-credit"><span><strong>Dev by Asif Atababayev</strong></span><span>All rights reserved © 2025 • Sirab IT Team</span></div>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script><script src="{{ url_for('static', filename='js/asis-modern.js') }}"></script>
+</body>
+</html>

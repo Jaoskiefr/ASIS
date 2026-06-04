@@ -1,61 +1,46 @@
-<nav class="navbar navbar-expand-lg navbar-dark bg-dark">
-  <div class="container-fluid">
-    <a class="navbar-brand d-flex align-items-center" href="{{ url_for('index') }}">
-      <i class="fas fa-cubes me-2"></i> ASIS
-    </a>
-
-    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#asisNavbar" aria-controls="asisNavbar" aria-expanded="false" aria-label="Toggle navigation">
-      <span class="navbar-toggler-icon"></span>
-    </button>
-
-    <div class="collapse navbar-collapse" id="asisNavbar">
-      <ul class="navbar-nav me-auto mb-2 mb-lg-0">
-        <li class="nav-item">
-          <a class="nav-link {% if request.path == url_for('index') %}active{% endif %}" href="{{ url_for('index') }}">
-            <i class="fas fa-home me-1"></i> Əsas Səhifə
-          </a>
-        </li>
-
-        <li class="nav-item">
-          <a class="nav-link {% if request.path.startswith(url_for('admin_drivers')) %}active{% endif %}" href="{{ url_for('admin_drivers') }}">
-            <i class="fas fa-id-card me-1"></i> Sürücülər
-          </a>
-        </li>
-
-        <li class="nav-item">
-          <a class="nav-link {% if request.path.startswith(url_for('admin_cars')) %}active{% endif %}" href="{{ url_for('admin_cars') }}">
-            <i class="fas fa-car me-1"></i> Avtomobillər
-          </a>
-        </li>
-
-        <li class="nav-item">
-          <a class="nav-link {% if request.path.startswith(url_for('admin_assistants')) %}active{% endif %}" href="{{ url_for('admin_assistants') }}">
-            <i class="fas fa-user-friends me-1"></i> Köməkçilər
-          </a>
-        </li>
-
-        <li class="nav-item">
-          <a class="nav-link {% if request.path.startswith(url_for('admin_planners')) %}active{% endif %}" href="{{ url_for('admin_planners') }}">
-            <i class="fas fa-user-tie me-1"></i> Planlamaçılar
-          </a>
-        </li>
-        
-        </ul>
-
-      <div class="d-flex align-items-center gap-2">
-        {% if session.get('fullname') %}
-          <span class="navbar-text text-white-50">
-            {{ session['fullname'] }} (Rol: <span class="text-success">Operator</span>)
-          </span>
-          <a class="btn btn-sm btn-outline-danger" href="{{ url_for('logout') }}">
-            <i class="fas fa-sign-out-alt me-1"></i> Çıxış
-          </a>
-        {% else %}
-          <a class="btn btn-sm btn-outline-light" href="{{ url_for('login') }}">
-            <i class="fas fa-sign-in-alt me-1"></i> Giriş
-          </a>
-        {% endif %}
-      </div>
+<div class="asis-sidebar-backdrop"></div>
+<aside class="asis-sidebar">
+  <div class="asis-brand">
+    <div class="asis-brand-icon"><i class="fas fa-route"></i></div>
+    <div>
+      <div class="asis-brand-title">ASİS</div>
+      <div class="asis-brand-subtitle">Nəqliyyat və xərc idarəetməsi</div>
     </div>
   </div>
-</nav>
+  <div class="asis-sidebar-scroll">
+    <div class="asis-nav-section">Əsas</div>
+    <a class="asis-nav-link {% if request.path == url_for('index') %}active{% endif %}" href="{{ url_for('index') }}"><i class="fas fa-gauge-high"></i><span>Operator Paneli</span></a>
+    <div class="asis-nav-section">İdarəetmə</div>
+    <a class="asis-nav-link {% if request.path.startswith(url_for('admin_cars')) %}active{% endif %}" href="{{ url_for('admin_cars') }}"><i class="fas fa-truck-moving"></i><span>Avtomobillər</span></a>
+    <a class="asis-nav-link {% if request.path.startswith(url_for('admin_drivers')) %}active{% endif %}" href="{{ url_for('admin_drivers') }}"><i class="fas fa-id-card"></i><span>Sürücülər</span></a>
+    <a class="asis-nav-link {% if request.path.startswith(url_for('admin_assistants')) %}active{% endif %}" href="{{ url_for('admin_assistants') }}"><i class="fas fa-user-friends"></i><span>Köməkçilər</span></a>
+    <a class="asis-nav-link {% if request.path.startswith(url_for('admin_planners')) %}active{% endif %}" href="{{ url_for('admin_planners') }}"><i class="fas fa-user-tie"></i><span>Planlamaçılar</span></a>
+  </div>
+  <div class="asis-sidebar-footer">
+    {% if session.get('fullname') %}
+      <div class="asis-user-card">
+        <div class="asis-avatar">{{ (session.get('fullname') or 'O')[:1] }}</div>
+        <div>
+          <div class="asis-user-name">{{ session.get('fullname') }}</div>
+          <div class="asis-user-role">Operator</div>
+        </div>
+      </div>
+      <a class="asis-logout-btn" href="{{ url_for('logout') }}"><i class="fas fa-right-from-bracket"></i> Çıxış</a>
+    {% else %}
+      <a class="asis-logout-btn" href="{{ url_for('login') }}"><i class="fas fa-right-to-bracket"></i> Giriş</a>
+    {% endif %}
+  </div>
+</aside>
+<header class="asis-topbar">
+  <div class="d-flex align-items-center gap-3">
+    <button class="asis-mobile-toggle" type="button" data-asis-sidebar-toggle aria-label="Menyunu aç"><i class="fas fa-bars"></i></button>
+    <div>
+      <p class="asis-topbar-title">Operator iş masası</p>
+      <p class="asis-topbar-subtitle">Avtomobil, heyət və xərc əməliyyatlarını sürətli idarə et</p>
+    </div>
+  </div>
+  <div class="asis-topbar-actions">
+    <span class="asis-credit-pill"><i class="fas fa-code"></i> Dev by Asif Atababayev</span>
+    <span class="asis-clock" data-asis-clock></span>
+  </div>
+</header>

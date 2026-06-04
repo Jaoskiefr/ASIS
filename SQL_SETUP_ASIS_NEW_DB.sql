@@ -1,3 +1,17 @@
+-- ASIS yeni test bazası quraşdırma faylı
+-- Bu fayl yeni baza yaradır: asis_new_db
+-- Mövcud serverdəki köhnə asis_db-yə toxunmur.
+
+CREATE DATABASE IF NOT EXISTS `asis_new_db` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- App root ilə işləməsin; ayrıca istifadəçi ilə işləsin.
+CREATE USER IF NOT EXISTS 'asis_app'@'localhost' IDENTIFIED BY 'GarajPro2025!';
+ALTER USER 'asis_app'@'localhost' IDENTIFIED BY 'GarajPro2025!';
+GRANT ALL PRIVILEGES ON `asis_new_db`.* TO 'asis_app'@'localhost';
+FLUSH PRIVILEGES;
+
+USE `asis_new_db`;
+
 -- MySQL dump 10.14  Distrib 5.5.68-MariaDB, for Linux (x86_64)
 --
 -- Host: localhost    Database: asis_db

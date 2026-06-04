@@ -6,43 +6,22 @@
     <title>ASİS - Operator Panel</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
-    
-    <style>
-        body {
-            background-image: url("{{ url_for('static', filename='bg.jpg') }}");
-            background-size: cover;
-            background-position: center;
-            background-attachment: fixed; 
-            min-height: 100vh;
-        }
-        .content-container {
-            background-color: rgba(255, 255, 255, 0.95); 
-            border-radius: 8px;
-            padding: 20px;
-            margin-top: 20px;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
-        }
-        .table-responsive { border-radius: 8px; overflow: hidden; }
-        .table thead { background-color: #0d6efd; color: white; }
-        .form-inline-delete { display: inline-block; margin: 0; padding: 0; }
-        .clickable-row { cursor: pointer; transition: background-color 0.2s ease-in-out; }
-        .clickable-row:hover { background-color: #f0f8ff; }
-        .clickable-row[aria-expanded="true"] { background-color: #e6f2ff; border-bottom: 2px solid #0d6efd; }
-        .expense-details-row td { background-color: #fafafa; padding: 0 !important; border-top: none !important; overflow: hidden; }
-        .expense-details-container { padding: 15px; background-color: #fdfdfd; box-shadow: inset 0 4px 8px rgba(0,0,0,0.05); }
-        .collapsing { transition: height 0.25s ease-out !important; }
-        
-        /* Tarixçə cədvəli üçün kiçik şrift */
-        .table-sm th, .table-sm td {
-            font-size: 0.85rem;
-            padding: 0.4rem;
-        }
-    </style>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/asis-modern.css') }}">
 </head>
-<body>
+<body class="asis-app">
     {% include 'operator_navbar.html' %}
-    
-    <div class="container-fluid mt-4 content-container">
+
+    {% set ns = namespace(total=0, expense_count=0, active=0) %}
+    {% for car in cars %}
+        {% set ns.total = ns.total + (car.total_expense or 0) %}
+        {% set ns.expense_count = ns.expense_count + (car.expenses|length) %}
+        {% if car.is_active %}{% set ns.active = ns.active + 1 %}{% endif %}
+    {% endfor %}
+
+    <div class="container-fluid mt-4 content-container asis-operator-shell">
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
                 {% for category, message in messages %}
@@ -54,67 +33,132 @@
             {% endif %}
         {% endwith %}
 
-        <div class="row">
-            <div class="col-12 mb-4">
-                <h2 class="text-primary"><i class="fas fa-tasks"></i> Operator Paneli</h2>
-                <div class="d-flex flex-wrap gap-2">
-                    <a href="{{ url_for('admin_drivers') }}" class="btn btn-success"><i class="fas fa-user-plus"></i> Sürücü İdarəetmə</a>
-                    <a href="{{ url_for('admin_cars') }}" class="btn btn-info text-white"><i class="fas fa-plus"></i> Avtomobil İdarəetmə</a>
-                    <a href="{{ url_for('admin_assistants') }}" class="btn btn-secondary"><i class="fas fa-user-friends"></i> Köməkçi İdarəetmə</a>
-                    <a href="{{ url_for('admin_planners') }}" class="btn btn-dark"><i class="fas fa-user-tie"></i> Planlamaçı İdarəetmə</a>
+        <div class="asis-page-hero asis-operator-hero">
+            <div>
+                <div class="asis-page-kicker">Operator paneli</div>
+                <h1 class="asis-page-title"><i class="fas fa-list-check text-primary"></i> Avtomobillər siyahısı</h1>
+                <p class="asis-page-description">Cədvələ iki dəfə klikləyərək avtomobil kartını aç, indiyə qədər yazılmış bütün xərcləri rahat şəkildə izləyin.</p>
+            </div>
+            <div class="asis-hero-tip">
+                <i class="fas fa-computer-mouse"></i>
+                <span>2 dəfə klik → Avtomobil kartı</span>
+            </div>
+        </div>
+
+        <div class="row g-3 mb-4">
+            <div class="col-xl-3 col-md-6">
+                <div class="asis-summary-card">
+                    <div class="asis-summary-icon"><i class="fas fa-truck-moving"></i></div>
+                    <div>
+                        <div class="asis-summary-label">Ümumi avtomobil</div>
+                        <div class="asis-summary-value">{{ cars|length }}</div>
+                    </div>
                 </div>
             </div>
+            <div class="col-xl-3 col-md-6">
+                <div class="asis-summary-card">
+                    <div class="asis-summary-icon success"><i class="fas fa-check-circle"></i></div>
+                    <div>
+                        <div class="asis-summary-label">Aktiv avtomobil</div>
+                        <div class="asis-summary-value">{{ ns.active }}</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xl-3 col-md-6">
+                <div class="asis-summary-card">
+                    <div class="asis-summary-icon warning"><i class="fas fa-file-invoice-dollar"></i></div>
+                    <div>
+                        <div class="asis-summary-label">Xərc qeydi</div>
+                        <div class="asis-summary-value">{{ ns.expense_count }}</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xl-3 col-md-6">
+                <div class="asis-summary-card">
+                    <div class="asis-summary-icon danger"><i class="fas fa-coins"></i></div>
+                    <div>
+                        <div class="asis-summary-label">Ümumi xərc</div>
+                        <div class="asis-summary-value">{{ '%.2f'|format(ns.total) }} <small>AZN</small></div>
+                    </div>
+                </div>
+            </div>
+        </div>
 
-            <div class="col-12">
-                <div class="table-responsive">
-                    <table class="table table-hover table-striped align-middle">
-                        <thead>
-                            <tr>
-                                <th>#</th>
-                                <th>Avtomobil Nömrəsi</th>
-                                <th>Marka / Model</th>
-                                <th>Kategoriya</th>
-                                <th>Sürücü Adı</th>
-                                <th>Köməkçi adı</th>
-                                <th>Planlamaçı</th>
-                                <th class="text-end text-warning">Ümumi Xərc (AZN)</th>
-                                <th class="text-warning">Son Xərci Qeyd Edən</th>
-                                <th>Qeydlər</th>
-                                <th class="text-center">Əməliyyatlar</th> 
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for car in cars %}
-                            <tr class="clickable-row" data-bs-toggle="collapse" data-bs-target="#details-{{ car.id }}" aria-expanded="false" aria-controls="details-{{ car.id }}">
-                                <td>{{ loop.index }} <i class="fas fa-chevron-down fa-xs text-muted ms-1"></i></td>
-                                <td><span class="badge bg-dark">{{ car.car_number }}</span></td>
-                                <td>{{ car.brand_model or '-' }}</td>
-                                <td>{{ car.category or '-' }}</td>
-                                <td>
-                                    {% if car.driver_name == "TƏYİN OLUNMAYIB" %}
-                                        <span class="badge bg-danger">{{ car.driver_name }}</span>
-                                    {% else %}
-                                        {{ car.driver_name }}
-                                    {% endif %}
-                                </td>
-                                <td>{{ car.assistant_name or '-' }}</td>
-                                <td>{{ car.planner_name or '-' }}</td>
-                                <td class="text-end text-danger fw-bold">
-                                    {{ "%.2f"|format(car.total_expense) if car.total_expense > 0 else "0.00" }}
-                                </td>
-                                <td>{{ car.entered_by|capitalize }}</td>
-                                <td>{{ car.notes }}</td>
-                                <td class="text-center">
+        <div class="asis-list-card">
+            <div class="asis-list-card-head">
+                <div>
+                    <h3><i class="fas fa-car-side"></i> Maşınlar</h3>
+                    <p>Sağ tərəfdə əməliyyatlar qalır. Xərcləri görmək üçün sətirə 2 dəfə kliklə və ya “Kart” düyməsini bas.</p>
+                </div>
+                <div class="asis-list-card-badge">{{ cars|length }} avtomobil</div>
+            </div>
+
+            <div class="asis-list-toolbar">
+                <div class="asis-toolbar-search">
+                    <i class="fas fa-search"></i>
+                    <input type="search" id="operatorCarSearch" class="form-control" placeholder="Maşınlar sütunundan axtar: nömrə, model, sürücü, qeyd...">
+                </div>
+                <div class="asis-toolbar-hint">İstədiyin sözü yaz, siyahı dərhal süzülsün.</div>
+            </div>
+
+            <div class="table-responsive">
+                <table class="table table-hover align-middle asis-operator-table" data-no-auto-search="1">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Avtomobil</th>
+                            <th>Marka / Model</th>
+                            <th>Kategoriya</th>
+                            <th>Sürücü</th>
+                            <th>Köməkçi</th>
+                            <th>Planlamaçı</th>
+                            <th class="text-end">Ümumi xərc</th>
+                            <th>Son qeyd edən</th>
+                            <th>Qeydlər</th>
+                            <th class="text-center">Əməliyyatlar</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for car in cars %}
+                        <tr class="asis-operator-row" ondblclick="openCarHistory('{{ car.id }}')">
+                            <td>{{ loop.index }}</td>
+                            <td>
+                                <div class="asis-car-chip-wrap">
+                                    <span class="asis-car-chip">{{ car.car_number }}</span>
+                                    <span class="badge {% if car.is_active %}bg-success{% else %}bg-secondary{% endif %}">{% if car.is_active %}Aktiv{% else %}Passiv{% endif %}</span>
+                                </div>
+                            </td>
+                            <td>{{ car.brand_model or '-' }}</td>
+                            <td>{{ car.category or '-' }}</td>
+                            <td>
+                                {% if car.driver_name == 'TƏYİN OLUNMAYIB' %}
+                                    <span class="badge bg-danger">{{ car.driver_name }}</span>
+                                {% else %}
+                                    {{ car.driver_name }}
+                                {% endif %}
+                            </td>
+                            <td>{{ car.assistant_name or '-' }}</td>
+                            <td>{{ car.planner_name or '-' }}</td>
+                            <td class="text-end text-danger fw-bold">{{ '%.2f'|format(car.total_expense or 0) }}</td>
+                            <td>{{ car.entered_by|capitalize }}</td>
+                            <td>
+                                <div class="asis-notes-cell">{{ car.notes or '-' }}</div>
+                            </td>
+                            <td class="text-center">
+                                <div class="asis-row-actions" onclick="event.stopPropagation();">
+                                    <button class="btn btn-sm btn-primary" type="button" onclick="openCarHistory('{{ car.id }}')" title="Avtomobil kartı">
+                                        <i class="fas fa-id-card me-1"></i> Kart
+                                    </button>
                                     <button 
-                                        class="btn btn-sm btn-outline-success me-1"
+                                        class="btn btn-sm btn-outline-success"
                                         data-bs-toggle="modal" data-bs-target="#expenseModal"
                                         data-bs-car-id="{{ car.id }}" data-bs-car-number="{{ car.car_number }}"
-                                        onclick="event.stopPropagation();" title="Xərc əlavə et">
-                                        <i class="fas fa-gas-pump"></i>
+                                        title="Xərc əlavə et">
+                                        <i class="fas fa-plus"></i>
                                     </button>
 
                                     <button 
-                                        class="btn btn-sm btn-secondary me-1"
+                                        class="btn btn-sm btn-secondary"
                                         data-bs-toggle="modal" data-bs-target="#carMetaModal"
                                         data-bs-car-id="{{ car.id }}" data-bs-car-number="{{ car.car_number }}"
                                         data-bs-brand="{{ car.brand_raw or '' }}"
@@ -124,92 +168,132 @@
                                         data-bs-assistant-id="{{ car.assistant_id or '' }}"
                                         data-bs-planner-id="{{ car.planner_id or '' }}"
                                         data-bs-notes="{{ car.notes or '' }}"
-                                        onclick="event.stopPropagation();" title="Avtomobil məlumatları">
-                                        <i class="fas fa-sliders"></i>
+                                        title="Avtomobil məlumatları">
+                                        <i class="fas fa-pen-to-square"></i>
                                     </button>
 
                                     {% if car.has_expenses %}
-                                        <button type="button" class="btn btn-sm btn-danger" disabled
-                                            onclick="event.stopPropagation();" 
-                                            title="Xərcləri olan avtomobil silinə bilməz">
+                                        <button type="button" class="btn btn-sm btn-outline-danger" disabled title="Xərcləri olan avtomobil silinə bilməz">
                                             <i class="fas fa-trash-alt"></i>
                                         </button>
                                     {% else %}
-                                        <form method="POST" action="{{ url_for('delete_car', id=car.id) }}" class="form-inline-delete" 
-                                              onsubmit="return confirm('Bu avtomobili silməyə əminsiniz?');">
-                                            <button type="submit" class="btn btn-sm btn-danger" 
-                                                    onclick="event.stopPropagation();" 
-                                                    title="Sil">
+                                        <form method="POST" action="{{ url_for('delete_car', id=car.id) }}" class="form-inline-delete" onsubmit="return confirm('Bu avtomobili silməyə əminsiniz?');">
+                                            <button type="submit" class="btn btn-sm btn-outline-danger" title="Sil">
                                                 <i class="fas fa-trash-alt"></i>
                                             </button>
                                         </form>
                                     {% endif %}
-                                </td>
-                            </tr>
-                            
-                            <tr class="collapse expense-details-row" id="details-{{ car.id }}">
-                                <td colspan="11"> <div class="expense-details-container">
-                                        <h5 class="text-primary"><i class="fas fa-history"></i> {{ car.car_number }} üçün Xərc Tarixçəsi</h5>
-                                        {% if car.expenses %}
-                                            <table class="table table-sm table-bordered">
-                                                <thead class="bg-light">
-                                                    <tr>
-                                                        <th>Tarix / Saat</th>
-                                                        <th>Növ</th>
-                                                        <!-- YENİ: Alt Növ Sütunu -->
-                                                        <th>Alt Növ (Detal)</th>
-                                                        <th class="text-end">Məbləğ (AZN)</th>
-                                                        <th class="text-end">Litr</th>
-                                                        <th>Açıqlama</th>
-                                                        <th>Sürücü (Xərc anında)</th>
-                                                        <th>Köməkçi (Xərc anında)</th>
-                                                        <th>Planlamaçı (Xərc anında)</th>
-                                                        <th>Qeyd Etdi</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    {% for expense in car.expenses %}
-                                                    <tr>
-                                                        <td>{{ expense.timestamp_str }}</td>
-                                                        <td>
-                                                            {% if expense.type == 'Yanacaq' %}<span class="badge bg-success">Yanacaq</span>
-                                                            {% elif expense.type == 'Təmir' %}<span class="badge bg-warning text-dark">Təmir</span>
-                                                            {% elif expense.type == 'Cərimə' %}<span class="badge bg-danger">Cərimə</span>
-                                                            {% elif expense.type == 'Avtoyuma' %}<span class="badge bg-info">Avtoyuma</span>
-                                                            {% elif expense.type == 'Yemək' %}<span class="badge bg-primary">Yemək</span>
-                                                            {% else %}<span class="badge bg-secondary">{{ expense.type }}</span>{% endif %}
-                                                        </td>
-                                                        <!-- YENİ: Alt Növü Göstər -->
-                                                        <td>
-                                                            {% if expense.subtype and expense.subtype != '-' %}
-                                                                <span class="badge bg-light text-dark border">{{ expense.subtype }}</span>
-                                                            {% else %}
-                                                                <span class="text-muted">-</span>
-                                                            {% endif %}
-                                                        </td>
-                                                        <td class="text-end text-danger fw-bold">{{ "%.2f"|format(expense.amount) }}</td>
-                                                        <td class="text-end">{{ expense.litr if expense.litr > 0 else '-' }}</td>
-                                                        <td>{{ expense.clean_description }}</td>
-                                                        <td>{{ expense.driver_name }}</td>
-                                                        <td>{{ expense.assistant_name }}</td>
-                                                        <td>{{ expense.planner_name }}</td>
-                                                        <td>{{ expense.entered_by|capitalize }}</td>
-                                                    </tr>
-                                                    {% endfor %}
-                                                </tbody>
-                                            </table>
-                                        {% else %}
-                                            <div class="alert alert-secondary text-center">
-                                                Bu avtomobil üçün heç bir xərc qeydə alınmayıb.
-                                            </div>
-                                        {% endif %}
-                                    </div>
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="asis-dashboard-credit mt-4"><strong>Dev by Asif Atababayev</strong> · All rights reserved © 2025 · Sirab IT Team</div>
+    </div>
+
+    {% for car in cars %}
+    <div class="d-none" id="history-template-{{ car.id }}">
+        <div class="asis-operator-detail-shell">
+            <div class="asis-operator-detail-top">
+                <div class="asis-operator-detail-brand">
+                    <div class="asis-operator-detail-icon"><i class="fas fa-car-side"></i></div>
+                    <div>
+                        <h4>{{ car.car_number }}</h4>
+                        <p>{{ car.brand_model or 'Model göstərilməyib' }}</p>
+                    </div>
                 </div>
+                <div class="asis-operator-stat-grid">
+                    <div class="asis-operator-stat"><span>Ümumi xərc</span><strong>{{ '%.2f'|format(car.total_expense or 0) }} AZN</strong></div>
+                    <div class="asis-operator-stat"><span>Qeyd sayı</span><strong>{{ car.expenses|length }}</strong></div>
+                    <div class="asis-operator-stat"><span>Son qeyd edən</span><strong>{{ car.entered_by|capitalize }}</strong></div>
+                </div>
+            </div>
+
+            <div class="asis-operator-meta-grid">
+                <div class="asis-operator-meta-card"><span>Sürücü</span><strong>{{ car.driver_name or '-' }}</strong></div>
+                <div class="asis-operator-meta-card"><span>Köməkçi</span><strong>{{ car.assistant_name or '-' }}</strong></div>
+                <div class="asis-operator-meta-card"><span>Planlamaçı</span><strong>{{ car.planner_name or '-' }}</strong></div>
+                <div class="asis-operator-meta-card"><span>Kategoriya</span><strong>{{ car.category or '-' }}</strong></div>
+            </div>
+
+            <div class="asis-operator-note-box">
+                <span>Qeyd</span>
+                <strong>{{ car.notes or 'Əlavə qeyd yoxdur.' }}</strong>
+            </div>
+
+            {% if car.expenses %}
+            <div class="asis-expense-table table-responsive mt-3">
+                <table class="table table-hover align-middle" data-no-auto-search="1">
+                    <thead>
+                        <tr>
+                            <th>Tarix / Saat</th>
+                            <th>Xərc növü</th>
+                            <th>Alt növ</th>
+                            <th class="text-end">Məbləğ</th>
+                            <th class="text-end">Litr</th>
+                            <th>Açıqlama</th>
+                            <th>Sürücü</th>
+                            <th>Köməkçi</th>
+                            <th>Planlamaçı</th>
+                            <th>Operator</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for expense in car.expenses %}
+                        <tr>
+                            <td>{{ expense.timestamp_str }}</td>
+                            <td>
+                                {% if expense.type == 'Yanacaq' %}
+                                    <span class="badge bg-success">Yanacaq</span>
+                                {% elif expense.type == 'Təmir' %}
+                                    <span class="badge bg-warning text-dark">Təmir</span>
+                                {% elif expense.type == 'Cərimə' %}
+                                    <span class="badge bg-danger">Cərimə</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">{{ expense.type }}</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if expense.subtype and expense.subtype != '-' %}
+                                    <span class="badge bg-light text-dark border">{{ expense.subtype }}</span>
+                                {% else %}
+                                    <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-end text-danger fw-bold">{{ '%.2f'|format(expense.amount) }}</td>
+                            <td class="text-end">{{ expense.litr if expense.litr > 0 else '-' }}</td>
+                            <td><small>{{ expense.clean_description }}</small></td>
+                            <td>{{ expense.driver_name or '-' }}</td>
+                            <td>{{ expense.assistant_name or '-' }}</td>
+                            <td>{{ expense.planner_name or '-' }}</td>
+                            <td>{{ expense.entered_by|capitalize }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="alert alert-secondary mt-3 mb-0">Bu avtomobil üçün hələ heç bir xərc qeydə alınmayıb.</div>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+
+    <div class="modal fade" id="carHistoryModal" tabindex="-1" aria-labelledby="carHistoryModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-fullscreen-xl-down modal-xl modal-dialog-scrollable">
+            <div class="modal-content asis-history-modal-content">
+                <div class="modal-header">
+                    <div>
+                        <div class="asis-modal-kicker">Avtomobil kartı</div>
+                        <h5 class="modal-title" id="carHistoryModalLabel">Avtomobil üzrə xərclər</h5>
+                    </div>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body" id="carHistoryModalBody"></div>
             </div>
         </div>
     </div>
@@ -224,57 +308,36 @@
                 <div class="modal-body">
                     <form id="expenseForm" method="POST" action="{{ url_for('add_expense') }}">
                         <p class="text-muted">Seçilmiş Avtomobil: <strong id="modalCarNumber"></strong></p>
-                        
                         <div class="mb-3">
                             <label for="expenseType" class="form-label">Xərc Növü</label>
                             <select class="form-select" id="expenseType" name="expense_type" required>
                                 <option value="" disabled selected>-- Növü seçin --</option>
-                                <option value="Yanacaq">Yanacaq</option>
-                                <option value="Təmir">Təmir</option>
-                                <option value="Cərimə">Cərimə</option>
-                                <option value="Avtoyuma">Avtoyuma</option>
-                                <option value="Yemək">Yemək</option>
-                                <option value="Digər">Digər</option>
-                            </select>
-                        </div>
-                        
-                        <div class="mb-3" id="fuelTypeGroup" style="display: none;">
-                            <label for="fuelSubType" class="form-label">Yanacaq Növü</label>
-                            <select class="form-select" id="fuelSubType" name="fuel_subtype">
-                                <option value="Dizel">Dizel</option>
-                                <option value="AI-92">AI-92</option>
-                                <option value="AI-95">AI-95</option>
-                            </select>
-                        </div>
-
-                        <div class="mb-3" id="fineTypeGroup" style="display: none;">
-                            <label class="form-label">Cərimə Səbəbi</label>
-                            <select class="form-select" id="fineSubType" name="fine_subtype">
-                                {% for ft in fine_types %}
-                                    <option value="{{ ft }}">{{ ft }}</option>
+                                {% for et in expense_types %}
+                                    <option value="{{ et }}">{{ et }}</option>
                                 {% endfor %}
                             </select>
                         </div>
-
-                        <div class="mb-3" id="repairTypeGroup" style="display: none;">
-                            <label class="form-label">Təmir Növü</label>
-                            <select class="form-select" id="repairSubType" name="repair_subtype">
-                                {% for rt in repair_types %}
-                                    <option value="{{ rt }}">{{ rt }}</option>
-                                {% endfor %}
-                            </select>
+                        <div class="mb-3" id="expenseSubtypeGroup" style="display: none;">
+                            <label for="expenseSubtype" class="form-label">Alt növ / detal</label>
+                            <select class="form-select" id="expenseSubtype" name="expense_subtype"></select>
                         </div>
-                        
                         <div class="mb-3">
                             <label for="amount" class="form-label" id="amountLabel">Məbləğ (AZN)</label>
                             <input type="number" step="0.01" class="form-control" id="amount" name="amount" required>
                         </div>
-                        
+                        <div class="mb-3">
+                            <label for="expenseDate" class="form-label">Xərc tarixi / saatı</label>
+                            <input type="datetime-local" class="form-control" id="expenseDate" name="expense_date" value="{{ default_expense_datetime }}" max="{{ default_expense_datetime }}" {% if not allow_past_expense_date and session.get('role') == 'user' %}min="{{ today_start_datetime }}"{% endif %} required>
+                            {% if allow_past_expense_date or session.get('role') != 'user' %}
+                                <div class="form-text text-success"><i class="fas fa-check-circle"></i> Admin icazəsi açıqdır: keçmiş tarixə xərc yazıla bilər.</div>
+                            {% else %}
+                                <div class="form-text text-danger"><i class="fas fa-lock"></i> Admin icazəsi bağlıdır: operator yalnız {{ today_display }} tarixinə xərc yaza bilər.</div>
+                            {% endif %}
+                        </div>
                         <div class="mb-3" id="litrGroup" style="display: none;">
                             <label class="form-label">Litr</label>
                             <input type="number" step="0.01" class="form-control" id="litr" name="litr">
                         </div>
-                        
                         <div class="mb-3">
                             <label for="description" class="form-label">Açıqlama / Qeyd</label>
                             <textarea class="form-control" id="description" name="description" rows="3" required></textarea>
@@ -289,7 +352,7 @@
             </div>
         </div>
     </div>
-    <!-- Meta Modal (Olduğu kimi qalır) -->
+
     <div class="modal fade" id="carMetaModal" tabindex="-1" aria-labelledby="carMetaModalLabel" aria-hidden="true">
         <div class="modal-dialog">
             <div class="modal-content">
@@ -301,51 +364,14 @@
                     <form id="carMetaForm" method="POST" action="{{ url_for('update_car_meta') }}">
                         <p class="text-muted">Avtomobil: <strong id="modalMetaCarNumber"></strong></p>
                         <input type="hidden" name="car_id" id="modalMetaCarId" value="">
-
                         <div class="row g-3">
-                            <div class="col-md-6">
-                                <label class="form-label">Marka</label>
-                                <input type="text" class="form-control" name="brand" id="metaBrand">
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label">Model</label>
-                                <input type="text" class="form-control" name="model_name" id="metaModelName">
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label">Kategoriya</label>
-                                <input type="text" class="form-control" name="category" id="metaCategory">
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label">Sürücü</label>
-                                <select class="form-select" name="driver_id" id="metaDriver">
-                                    <option value="">Seçilməyib (Boş)</option>
-                                    {% for driver in drivers %}
-                                        <option value="{{ driver.id }}">{{ driver.name }}</option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label">Köməkçi</label>
-                                <select class="form-select" name="assistant_id" id="metaAssistant">
-                                    <option value="">Seçilməyib</option>
-                                    {% for a in assistants %}
-                                        <option value="{{ a.id }}">{{ a.name }}</option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label">Planlamaçı</label>
-                                <select class="form-select" name="planner_id" id="metaPlanner">
-                                    <option value="">Seçilməyib</option>
-                                    {% for p in planners %}
-                                        <option value="{{ p.id }}">{{ p.name }}</option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                            <div class="col-12">
-                                <label class="form-label">Qeydlər</label>
-                                <textarea class="form-control" rows="3" name="notes" id="metaNotes"></textarea>
-                            </div>
+                            <div class="col-md-6"><label class="form-label">Marka</label><input type="text" class="form-control" name="brand" id="metaBrand"></div>
+                            <div class="col-md-6"><label class="form-label">Model</label><input type="text" class="form-control" name="model_name" id="metaModelName"></div>
+                            <div class="col-md-6"><label class="form-label">Kategoriya</label><input type="text" class="form-control" name="category" id="metaCategory"></div>
+                            <div class="col-md-6"><label class="form-label">Sürücü</label><select class="form-select" name="driver_id" id="metaDriver"><option value="">Seçilməyib (Boş)</option>{% for driver in drivers %}<option value="{{ driver.id }}">{{ driver.name }}</option>{% endfor %}</select></div>
+                            <div class="col-md-6"><label class="form-label">Köməkçi</label><select class="form-select" name="assistant_id" id="metaAssistant"><option value="">Seçilməyib</option>{% for a in assistants %}<option value="{{ a.id }}">{{ a.name }}</option>{% endfor %}</select></div>
+                            <div class="col-md-6"><label class="form-label">Planlamaçı</label><select class="form-select" name="planner_id" id="metaPlanner"><option value="">Seçilməyib</option>{% for p in planners %}<option value="{{ p.id }}">{{ p.name }}</option>{% endfor %}</select></div>
+                            <div class="col-12"><label class="form-label">Qeydlər</label><textarea class="form-control" rows="3" name="notes" id="metaNotes"></textarea></div>
                         </div>
                     </form>
                 </div>
@@ -358,136 +384,100 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-    
     <script>
+        function openCarHistory(carId) {
+            const source = document.getElementById('history-template-' + carId);
+            const body = document.getElementById('carHistoryModalBody');
+            const modalEl = document.getElementById('carHistoryModal');
+            if (!source || !body || !modalEl) return;
+            body.innerHTML = source.innerHTML;
+            const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+            modal.show();
+        }
+
         document.addEventListener('DOMContentLoaded', function() {
-            
             const expenseModal = document.getElementById('expenseModal');
             const expenseTypeSelect = document.getElementById('expenseType');
-            
-            const fuelTypeGroup = document.getElementById('fuelTypeGroup');
-            const fuelSubTypeSelect = document.getElementById('fuelSubType');
-            
-            const fineTypeGroup = document.getElementById('fineTypeGroup');
-            const fineSubTypeSelect = document.getElementById('fineSubType');
-
-            const repairTypeGroup = document.getElementById('repairTypeGroup');
-            const repairSubTypeSelect = document.getElementById('repairSubType');
-
+            const subtypeGroup = document.getElementById('expenseSubtypeGroup');
+            const subtypeSelect = document.getElementById('expenseSubtype');
             const litrGroup = document.getElementById('litrGroup');
+            const expenseSubtypeMap = {{ expense_subtypes | tojson }};
 
-            // --- YENİ XƏRC NÖVÜ MƏNTİQİ ---
-            if (expenseTypeSelect) {
-                expenseTypeSelect.addEventListener('change', function() {
-                    const selectedType = this.value;
-                    
-                    // Reset all
-                    fuelTypeGroup.style.display = 'none';
-                    fuelSubTypeSelect.removeAttribute('required');
-                    
-                    fineTypeGroup.style.display = 'none';
-                    fineSubTypeSelect.removeAttribute('required');
-
-                    repairTypeGroup.style.display = 'none';
-                    repairSubTypeSelect.removeAttribute('required');
-
-                    litrGroup.style.display = 'none';
-
-                    if (selectedType === 'Yanacaq') {
-                        fuelTypeGroup.style.display = 'block';
-                        fuelSubTypeSelect.setAttribute('required', 'required');
-                        litrGroup.style.display = 'block';
-                    } else if (selectedType === 'Cərimə') {
-                        fineTypeGroup.style.display = 'block';
-                        fineSubTypeSelect.setAttribute('required', 'required');
-                    } else if (selectedType === 'Təmir') {
-                        repairTypeGroup.style.display = 'block';
-                        repairSubTypeSelect.setAttribute('required', 'required');
-                    }
-                });
+            function refreshSubtypeOptions() {
+                if (!expenseTypeSelect || !subtypeGroup || !subtypeSelect) return;
+                const selectedType = expenseTypeSelect.value;
+                const items = expenseSubtypeMap[selectedType] || [];
+                subtypeSelect.innerHTML = '';
+                if (items.length) {
+                    const emptyOption = document.createElement('option');
+                    emptyOption.value = '';
+                    emptyOption.textContent = '-- Alt növü seçin --';
+                    subtypeSelect.appendChild(emptyOption);
+                    items.forEach(function(item) {
+                        const option = document.createElement('option');
+                        option.value = item;
+                        option.textContent = item;
+                        subtypeSelect.appendChild(option);
+                    });
+                    subtypeGroup.style.display = 'block';
+                } else {
+                    subtypeGroup.style.display = 'none';
+                }
+                if (litrGroup) {
+                    litrGroup.style.display = selectedType === 'Yanacaq' ? 'block' : 'none';
+                }
             }
 
-            // Xərc modalı açılarkən məlumatları ötür və formu sıfırla
+            if (expenseTypeSelect) {
+                expenseTypeSelect.addEventListener('change', refreshSubtypeOptions);
+            }
+
             if (expenseModal) {
                 expenseModal.addEventListener('show.bs.modal', function (event) {
-                    event.stopPropagation(); 
-                    const button = event.relatedTarget; 
+                    const button = event.relatedTarget;
+                    if (!button) return;
                     const carId = button.getAttribute('data-bs-car-id');
                     const carNumber = button.getAttribute('data-bs-car-number');
+                    document.getElementById('expenseForm').reset();
                     expenseModal.querySelector('#modalCarNumber').textContent = carNumber;
                     expenseModal.querySelector('#modalCarId').value = carId;
-
-                    // Formu sıfırla (əvvəlki seçimlər qalmasın)
-                    document.getElementById('expenseForm').reset();
-                    
-                    // Display reset
-                    fuelTypeGroup.style.display = 'none';
-                    fuelSubTypeSelect.removeAttribute('required');
-                    
-                    fineTypeGroup.style.display = 'none';
-                    fineSubTypeSelect.removeAttribute('required');
-                    
-                    repairTypeGroup.style.display = 'none';
-                    repairSubTypeSelect.removeAttribute('required');
-                    
-                    litrGroup.style.display = 'none';
+                    const expenseDateInput = expenseModal.querySelector('#expenseDate');
+                    if (expenseDateInput) expenseDateInput.value = '{{ default_expense_datetime }}';
+                    if (subtypeGroup) subtypeGroup.style.display = 'none';
+                    if (subtypeSelect) subtypeSelect.innerHTML = '';
+                    if (litrGroup) litrGroup.style.display = 'none';
                 });
             }
-            
-            // KÖHNƏ LİTR MƏNTİQİ (RADIO DÜYMƏLƏR) ARTIQ LAZIM DEYİL
 
-            // Avtomobil meta modalı
             const carMetaModal = document.getElementById('carMetaModal');
             if (carMetaModal) {
                 carMetaModal.addEventListener('show.bs.modal', function (event) {
-                    event.stopPropagation();
                     const button = event.relatedTarget;
-                    const carId = button.getAttribute('data-bs-car-id');
-                    const carNumber = button.getAttribute('data-bs-car-number');
-
-                    const brand = button.getAttribute('data-bs-brand') || '';
-                    const modelName = button.getAttribute('data-bs-model-name') || '';
-                    const category = button.getAttribute('data-bs-category') || '';
-                    
-                    const driverId = button.getAttribute('data-bs-driver-id') || ''; 
-                    const assistantId = button.getAttribute('data-bs-assistant-id') || '';
-                    const plannerId = button.getAttribute('data-bs-planner-id') || '';
-                    
-                    const notes = button.getAttribute('data-bs-notes') || '';
-
-                    carMetaModal.querySelector('#modalMetaCarNumber').textContent = carNumber;
-                    carMetaModal.querySelector('#modalMetaCarId').value = carId;
-
-                    carMetaModal.querySelector('#metaBrand').value = brand;
-                    carMetaModal.querySelector('#metaModelName').value = modelName;
-                    carMetaModal.querySelector('#metaCategory').value = category; // Düzəliş: carMetaMetaModal -> carMetaModal
-
-                    carMetaModal.querySelector('#metaDriver').value = driverId; 
-                    carMetaModal.querySelector('#metaAssistant').value = assistantId;
-                    carMetaModal.querySelector('#metaPlanner').value = plannerId;
-                    
-                    carMetaModal.querySelector('#metaNotes').value = notes;
+                    if (!button) return;
+                    carMetaModal.querySelector('#modalMetaCarNumber').textContent = button.getAttribute('data-bs-car-number');
+                    carMetaModal.querySelector('#modalMetaCarId').value = button.getAttribute('data-bs-car-id');
+                    carMetaModal.querySelector('#metaBrand').value = button.getAttribute('data-bs-brand') || '';
+                    carMetaModal.querySelector('#metaModelName').value = button.getAttribute('data-bs-model-name') || '';
+                    carMetaModal.querySelector('#metaCategory').value = button.getAttribute('data-bs-category') || '';
+                    carMetaModal.querySelector('#metaDriver').value = button.getAttribute('data-bs-driver-id') || '';
+                    carMetaModal.querySelector('#metaAssistant').value = button.getAttribute('data-bs-assistant-id') || '';
+                    carMetaModal.querySelector('#metaPlanner').value = button.getAttribute('data-bs-planner-id') || '';
+                    carMetaModal.querySelector('#metaNotes').value = button.getAttribute('data-bs-notes') || '';
                 });
             }
 
-            // Aşağı-açılan xərc tarixçəsi icon animasiyası
-            document.querySelectorAll('.collapse').forEach(function(collapseEl) {
-                collapseEl.addEventListener('show.bs.collapse', function () {
-                    const triggerRow = document.querySelector('[data-bs-target="#' + collapseEl.id + '"]');
-                    if(triggerRow) {
-                        const icon = triggerRow.querySelector('.fa-chevron-down');
-                        if(icon) icon.style.transform = 'rotate(180deg)';
-                    }
+            const operatorSearch = document.getElementById('operatorCarSearch');
+            if (operatorSearch) {
+                const rows = Array.from(document.querySelectorAll('.asis-operator-table tbody tr.asis-operator-row'));
+                operatorSearch.addEventListener('input', function () {
+                    const q = this.value.trim().toLocaleLowerCase('az-AZ');
+                    rows.forEach(function (row) {
+                        row.style.display = !q || row.innerText.toLocaleLowerCase('az-AZ').includes(q) ? '' : 'none';
+                    });
                 });
-                collapseEl.addEventListener('hide.bs.collapse', function () {
-                    const triggerRow = document.querySelector('[data-bs-target="#' + collapseEl.id + '"]');
-                    if(triggerRow) {
-                        const icon = triggerRow.querySelector('.fa-chevron-down');
-                        if(icon) icon.style.transform = 'rotate(0deg)';
-                    }
-                });
-            });
+            }
         });
     </script>
+    <script src="{{ url_for('static', filename='js/asis-modern.js') }}"></script>
 </body>
 </html>
