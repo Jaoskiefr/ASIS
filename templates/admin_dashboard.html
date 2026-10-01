@@ -28,14 +28,19 @@
 
         <div class="asis-page-hero">
             <div>
-                <div class="asis-page-kicker">Admin paneli</div>
+                <div class="asis-page-kicker">{% if session.get('role') == 'reporter' %}Panel{% else %}Admin paneli{% endif %}</div>
                 <h1 class="asis-page-title"><i class="fas fa-user-shield text-primary"></i> Nəzarət və analitika</h1>
                 <p class="asis-page-description">Aylıq xərc dəyişimini, sistem saylarını və əsas idarəetmə bölmələrini bir paneldən izlə.</p>
             </div>
             <div class="asis-quick-actions">
+                {% if session.get('role') != 'reporter' %}
                 <a href="{{ url_for('admin_users') }}" class="btn btn-primary"><i class="fas fa-user-cog me-2"></i> Operatorlar</a>
+                {% endif %}
                 <a href="{{ url_for('admin_reports') }}" class="btn btn-warning"><i class="fas fa-chart-pie me-2"></i> Xərc hesabatı</a>
+                <a href="{{ url_for('pivot_reports') }}" class="btn btn-primary"><i class="fas fa-layer-group me-2"></i> Pivot analitika</a>
+                {% if session.get('role') != 'reporter' %}
                 <a href="{{ url_for('admin_settings') }}" class="btn btn-dark"><i class="fas fa-sliders me-2"></i> Sistem ayarları</a>
+                {% endif %}
             </div>
         </div>
 
@@ -103,9 +108,11 @@
                     <div class="card-header"><i class="fas fa-layer-group me-2"></i> Sistem xülasəsi</div>
                     <div class="card-body">
                         <div class="asis-admin-mini-grid">
+                            {% if session.get('role') != 'reporter' %}
                             <a href="{{ url_for('admin_users') }}" class="asis-admin-mini-card">
                                 <i class="fas fa-users"></i><span>Operatorlar</span><strong>{{ stats.operator_count }}</strong>
                             </a>
+                            {% endif %}
                             <a href="{{ url_for('admin_cars') }}" class="asis-admin-mini-card">
                                 <i class="fas fa-car"></i><span>Avtomobillər</span><strong>{{ stats.car_count }}</strong>
                             </a>
