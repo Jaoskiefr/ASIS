@@ -62,6 +62,7 @@
                             <label class="form-label">Vəzifə (Rol)</label>
                             <select class="form-select" name="role">
                                 <option value="user">Operator</option>
+                                <option value="reporter">Raporçu</option>
                                 <option value="admin">Admin</option>
                                 <option value="supervisor">Supervisor</option>
                             </select>
@@ -94,6 +95,7 @@
                         <td>
                             {% if user.role == 'admin' %} <span class="badge bg-danger">Admin</span>
                             {% elif user.role == 'supervisor' %} <span class="badge bg-warning text-dark">Supervisor</span>
+                            {% elif user.role == 'reporter' %} <span class="badge bg-info text-dark">Raporçu</span>
                             {% else %} <span class="badge bg-success">Operator</span>
                             {% endif %}
                         </td>
