@@ -3,14 +3,16 @@
   <div class="asis-brand">
     <div class="asis-brand-icon"><i class="fas fa-shield-halved"></i></div>
     <div>
-      <div class="asis-brand-title">ASİS Admin</div>
-      <div class="asis-brand-subtitle">Hesabat, icazə və nəzarət paneli</div>
+      <div class="asis-brand-title">{% if session.get('role') == 'reporter' %}ASİS Raporçu{% else %}ASİS Admin{% endif %}</div>
+      <div class="asis-brand-subtitle">{% if session.get('role') == 'reporter' %}Hesabat və analitika paneli{% else %}Hesabat, icazə və nəzarət paneli{% endif %}</div>
     </div>
   </div>
   <div class="asis-sidebar-scroll">
     <div class="asis-nav-section">İdarə paneli</div>
-    <a class="asis-nav-link {% if request.path == url_for('index') %}active{% endif %}" href="{{ url_for('index') }}"><i class="fas fa-chart-line"></i><span>Admin Paneli</span></a>
+    <a class="asis-nav-link {% if request.path == url_for('index') %}active{% endif %}" href="{{ url_for('index') }}"><i class="fas fa-chart-line"></i><span>{% if session.get('role') == 'reporter' %}Panel{% else %}Admin Paneli{% endif %}</span></a>
+    {% if session.get('role') != 'reporter' %}
     <a class="asis-nav-link {% if request.path.startswith('/admin/users') or request.path.startswith('/admin/user') %}active{% endif %}" href="{{ url_for('admin_users') }}"><i class="fas fa-user-gear"></i><span>Operatorlar</span></a>
+    {% endif %}
     <div class="asis-nav-section">İdarəetmə</div>
     <a class="asis-nav-link {% if request.path.startswith('/admin/cars') or request.path.startswith('/admin/car') %}active{% endif %}" href="{{ url_for('admin_cars') }}"><i class="fas fa-car-side"></i><span>Maşınlar</span></a>
     <a class="asis-nav-link {% if request.path.startswith('/admin/drivers') or request.path.startswith('/admin/driver') %}active{% endif %}" href="{{ url_for('admin_drivers') }}"><i class="fas fa-id-card"></i><span>Sürücülər</span></a>
@@ -19,9 +21,11 @@
     <div class="asis-nav-section">Hesabatlar</div>
     <a class="asis-nav-link {% if request.path == url_for('admin_reports') %}active{% endif %}" href="{{ url_for('admin_reports') }}"><i class="fas fa-chart-pie"></i><span>Xərc Hesabatları</span></a>
     <a class="asis-nav-link {% if request.path == url_for('pivot_reports') %}active{% endif %}" href="{{ url_for('pivot_reports') }}"><i class="fas fa-layer-group"></i><span>Pivot Analitika</span></a>
+    {% if session.get('role') != 'reporter' %}
     <a class="asis-nav-link {% if request.path == url_for('admin_deleted_reports') %}active{% endif %}" href="{{ url_for('admin_deleted_reports') }}"><i class="fas fa-box-archive"></i><span>Silinən Xərclər</span></a>
     <div class="asis-nav-section">Sistem</div>
     <a class="asis-nav-link {% if request.path == url_for('admin_settings') %}active{% endif %}" href="{{ url_for('admin_settings') }}"><i class="fas fa-sliders"></i><span>Sistem Ayarları</span></a>
+    {% endif %}
   </div>
   <div class="asis-sidebar-footer">
     {% if session.get('fullname') %}
@@ -29,7 +33,7 @@
         <div class="asis-avatar">{{ (session.get('fullname') or 'A')[:1] }}</div>
         <div>
           <div class="asis-user-name">{{ session.get('fullname') }}</div>
-          <div class="asis-user-role">Admin</div>
+          <div class="asis-user-role">{% if session.get('role') == 'reporter' %}Raporçu{% else %}Admin{% endif %}</div>
         </div>
       </div>
       <a class="asis-logout-btn" href="{{ url_for('logout') }}"><i class="fas fa-right-from-bracket"></i> Çıxış</a>
@@ -42,8 +46,8 @@
   <div class="d-flex align-items-center gap-3">
     <button class="asis-mobile-toggle" type="button" data-asis-sidebar-toggle aria-label="Menyunu aç"><i class="fas fa-bars"></i></button>
     <div>
-      <p class="asis-topbar-title">Admin idarəetmə paneli</p>
-      <p class="asis-topbar-subtitle">Maşınlar, sürücülər, operatorlar və xərclər üzrə tam nəzarət</p>
+      <p class="asis-topbar-title">{% if session.get('role') == 'reporter' %}Hesabat paneli{% else %}Admin idarəetmə paneli{% endif %}</p>
+      <p class="asis-topbar-subtitle">{% if session.get('role') == 'reporter' %}Maşınlar, şəxslər və xərclər üzrə yalnız baxış və analitika{% else %}Maşınlar, sürücülər, operatorlar və xərclər üzrə tam nəzarət{% endif %}</p>
     </div>
   </div>
   <div class="asis-topbar-actions">
