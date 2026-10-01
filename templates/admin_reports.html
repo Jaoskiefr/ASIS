@@ -174,7 +174,7 @@
                             <th class="text-end">Litr</th>
                             <th>Açıqlama</th>
                             <th>Operator</th>
-                            <th class="text-center pe-4">Sil</th>
+                            {% if session.get('role') != 'reporter' %}<th class="text-center pe-4">Sil</th>{% endif %}
                         </tr>
                     </thead>
                     <tbody>
@@ -218,6 +218,7 @@
                             <td class="text-end">{{ item.expense.litr if item.expense.litr > 0 else '-' }}</td>
                             <td><small class="text-muted">{{ item.clean_description }}</small></td>
                             <td><small>{{ item.user.fullname if item.user else item.expense.entered_by }}</small></td>
+                            {% if session.get('role') != 'reporter' %}
                             <td class="text-center pe-4">
                                 <form method="POST" action="{{ url_for('delete_expense', id=item.expense.expense_id) }}" onsubmit="return confirm('Bu xərci silmək istədiyinizə əminsiniz?');">
                                     <button type="submit" class="btn btn-sm btn-outline-danger shadow-sm" title="Sil">
@@ -225,6 +226,7 @@
                                     </button>
                                 </form>
                             </td>
+                            {% endif %}
                         </tr>
                         {% endfor %}
                     </tbody>
