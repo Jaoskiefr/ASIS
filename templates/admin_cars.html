@@ -11,7 +11,7 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/asis-modern.css') }}">
 </head>
 <body class="asis-app">
-  {% if session['role'] == 'supervisor' %}{% include 'supervisor_navbar.html' %}{% elif session['role'] == 'admin' %}{% include 'admin_navbar.html' %}{% else %}{% include 'operator_navbar.html' %}{% endif %}
+  {% if session['role'] == 'supervisor' %}{% include 'supervisor_navbar.html' %}{% elif session['role'] in ['admin', 'reporter'] %}{% include 'admin_navbar.html' %}{% else %}{% include 'operator_navbar.html' %}{% endif %}
   {% set active_count = cars|selectattr('is_active')|list|length %}
   <div class="container-fluid mt-4 content-container">
     {% with messages = get_flashed_messages(with_categories=true) %}{% if messages %}{% for category, message in messages %}<div class="alert alert-{{ category or 'info' }} alert-dismissible fade show" role="alert">{{ message }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>{% endfor %}{% endif %}{% endwith %}
@@ -20,9 +20,9 @@
       <div>
         <div class="asis-page-kicker">İdarəetmə</div>
         <h1 class="asis-page-title"><i class="fas fa-car-side text-primary"></i> Avtomobillər</h1>
-        <p class="asis-page-description">Avtomobil kartlarını premium görünüşdə idarə et. Info, redaktə, passiv et və sil əməliyyatları kartın içindədir.</p>
+        <p class="asis-page-description">Avtomobil kartlarını premium görünüşdə izlə. Raporçu rolunda yalnız Info və xərc tarixçəsinə baxış mümkündür.</p>
       </div>
-      <button class="btn btn-primary" data-bs-toggle="collapse" data-bs-target="#addCarPanel"><i class="fas fa-plus me-2"></i> Yeni avtomobil</button>
+      {% if session.get('role') != 'reporter' %}<button class="btn btn-primary" data-bs-toggle="collapse" data-bs-target="#addCarPanel"><i class="fas fa-plus me-2"></i> Yeni avtomobil</button>{% endif %}
     </div>
 
     <div class="row g-3 mb-4">
@@ -31,7 +31,7 @@
       <div class="col-lg-4 col-md-6"><div class="asis-summary-card"><div class="asis-summary-icon warning"><i class="fas fa-file-invoice-dollar"></i></div><div><div class="asis-summary-label">Xərci olan</div><div class="asis-summary-value">{{ cars|selectattr('expense_count')|list|length }}</div></div></div></div>
     </div>
 
-    <div class="collapse mb-4" id="addCarPanel">
+    {% if session.get('role') != 'reporter' %}<div class="collapse mb-4" id="addCarPanel">
       <div class="card asis-add-panel">
         <div class="card-header"><i class="fas fa-plus-circle me-2"></i>Yeni avtomobil əlavə et</div>
         <div class="card-body">
@@ -45,7 +45,7 @@
           </form>
         </div>
       </div>
-    </div>
+    </div>{% endif %}
 
     <div class="asis-list-toolbar mb-4" data-asis-filter-wrap>
       <div class="asis-toolbar-search">
@@ -68,11 +68,11 @@
           <div class="asis-mini-stat"><span>Planlamaçı</span><strong>{{ car.planner_name or 'Yoxdur' }}</strong></div>
         </div>
         <div class="asis-entity-actions">
-          <a class="btn btn-sm btn-primary" href="{{ url_for('entity_info', entity_type='car', entity_id=car.id) }}"><i class="fas fa-circle-info me-1"></i> Info</a>
+          <a class="btn btn-sm btn-primary" href="{{ url_for('entity_info', entity_type='car', entity_id=car.id) }}"><i class="fas fa-circle-info me-1"></i> Info</a>{% if session.get('role') != 'reporter' %}
           <a href="{{ url_for('edit_car', id=car.id) }}" class="btn btn-sm btn-warning"><i class="fas fa-edit me-1"></i> Redaktə</a>
           <form action="{{ url_for('toggle_car_status', id=car.id) }}" method="POST" class="d-inline"><button class="btn btn-sm btn-outline-secondary"><i class="fas fa-power-off me-1"></i>{% if car.is_active %}Passiv et{% else %}Aktiv et{% endif %}</button></form>
           {% if not car.expense_count %}<form method="POST" action="{{ url_for('delete_car', id=car.id) }}" onsubmit="return confirm('Bu avtomobili silmək istədiyinizə əminsiniz?');" class="d-inline"><button class="btn btn-sm btn-outline-danger"><i class="fas fa-trash-alt"></i></button></form>{% else %}<button class="btn btn-sm btn-outline-danger" disabled title="Xərci olan maşın silinə bilməz"><i class="fas fa-lock"></i></button>{% endif %}
-        </div>
+        {% endif %}</div>
       </div>
       {% else %}<div class="alert alert-secondary">Hələ avtomobil yoxdur.</div>{% endfor %}
     </div>
