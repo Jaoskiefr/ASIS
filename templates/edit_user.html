@@ -64,6 +64,7 @@
                             <label class="form-label">Vəzifə (Rol)</label>
                             <select class="form-select" name="role">
                                 <option value="user" {% if user.role == 'user' %}selected{% endif %}>Operator</option>
+                                <option value="reporter" {% if user.role == 'reporter' %}selected{% endif %}>Raporçu</option>
                                 <option value="admin" {% if user.role == 'admin' %}selected{% endif %}>Admin</option>
                             </select>
                         </div>
