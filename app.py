@@ -203,7 +203,9 @@ def get_all_cars(only_active=False):
 def get_operators():
     conn = get_connection_safe()
     try:
-        with conn.cursor() as c: c.execute("SELECT * FROM users WHERE role = 'user' ORDER BY fullname"); return c.fetchall()
+        with conn.cursor() as c:
+            c.execute("SELECT * FROM users WHERE role IN ('user', 'reporter') ORDER BY fullname")
+            return c.fetchall()
     finally: conn.close()
 
 def get_all_users():
@@ -623,6 +625,7 @@ def role_required(roles):
 def admin_required(f): return role_required(['admin'])(f)
 def supervisor_required(f): return role_required(['supervisor'])(f)
 def operator_required(f): return role_required(['user', 'admin', 'supervisor'])(f)
+def management_view_required(f): return role_required(['user', 'admin', 'supervisor', 'reporter'])(f)
 
 # --- ROUTES ---
 @app.route('/login', methods=['GET', 'POST'])
@@ -645,7 +648,7 @@ def logout():
 @login_required
 def index():
     if session['role'] == 'supervisor': return redirect(url_for('supervisor_dashboard'))
-    if session['role'] == 'admin':
+    if session['role'] in ['admin', 'reporter']:
         conn = get_connection_safe()
         try:
             with conn.cursor() as c:
@@ -768,7 +771,7 @@ def update_car_meta():
     return redirect(url_for('index'))
 @app.route('/pivot_reports')
 def pivot_reports():
-    if 'user' not in session or session.get('role') not in ['admin', 'supervisor']:
+    if 'user' not in session or session.get('role') not in ['admin', 'supervisor', 'reporter']:
         return redirect(url_for('login'))
     
     sd = request.args.get('start_date')
@@ -830,7 +833,7 @@ def pivot_reports():
 # --- ADMIN REPORTS ---
 @app.route('/admin/reports')
 def admin_reports():
-    if session.get('role') not in ['admin', 'supervisor']: return redirect(url_for('index'))
+    if session.get('role') not in ['admin', 'supervisor', 'reporter']: return redirect(url_for('index'))
     
     try:
         f_car = request.args.get('car_id'); f_dr = request.args.get('driver_id'); f_as = request.args.get('assistant_id'); f_pl = request.args.get('planner_id'); f_op = request.args.get('operator_id'); f_t = request.args.get('expense_type'); f_sub = request.args.get('subtype_filter')
@@ -918,7 +921,7 @@ def admin_reports():
         return f"<h1>SİSTEM XƏTASI (DEBUG)</h1><pre>{traceback.format_exc()}</pre>"
 @app.route('/admin/reports/export')
 def admin_reports_export():
-    if session.get('role') not in ['admin', 'supervisor']: return redirect(url_for('index'))
+    if session.get('role') not in ['admin', 'supervisor', 'reporter']: return redirect(url_for('index'))
     
     # Filtrləri alırıq (Axtarışda nə seçilibsə, onu Excel-ə çəkəcək)
     f_car = request.args.get('car_id'); f_dr = request.args.get('driver_id'); f_as = request.args.get('assistant_id'); f_pl = request.args.get('planner_id'); f_op = request.args.get('operator_id'); f_t = request.args.get('expense_type'); f_sub = request.args.get('subtype_filter')
@@ -1243,7 +1246,7 @@ def supervisor_delete_user(id):
 
 # --- STANDARD CRUD ---
 @app.route('/admin/drivers')
-@operator_required
+@management_view_required
 def admin_drivers():
     drs = get_management_counts('drivers', 'id')
     for d in drs:
@@ -1339,7 +1342,7 @@ def bulk_add_driver():
     return redirect(url_for('admin_drivers'))
 
 @app.route('/admin/cars')
-@operator_required
+@management_view_required
 def admin_cars(): return render_template('admin_cars.html', cars=get_management_counts('cars', 'id'), drivers=get_all_drivers(True), assistants=get_all_assistants(True), planners=get_all_planners(True))
 
 @app.route('/admin/cars/add', methods=['POST'])
@@ -1404,7 +1407,7 @@ def bulk_add_car():
     return redirect(url_for('admin_cars'))
 
 @app.route('/admin/assistants')
-@operator_required
+@management_view_required
 def admin_assistants(): return render_template('admin_assistants.html', assistants=get_management_counts('assistants', 'id'))
 @app.route('/admin/assistants/add', methods=['POST'])
 @operator_required
@@ -1428,7 +1431,7 @@ def bulk_add_assistant():
     conn.commit(); conn.close(); return redirect(url_for('admin_assistants'))
 
 @app.route('/admin/planners')
-@operator_required
+@management_view_required
 def admin_planners(): return render_template('admin_planners.html', planners=get_management_counts('planners', 'id'))
 @app.route('/admin/planners/add', methods=['POST'])
 @operator_required
@@ -1453,8 +1456,11 @@ def bulk_add_planner():
 
 
 @app.route('/admin/info/<entity_type>/<int:entity_id>')
-@operator_required
+@management_view_required
 def entity_info(entity_type, entity_id):
+    if session.get('role') == 'reporter' and entity_type not in ['car', 'driver', 'assistant', 'planner']:
+        flash('Bu bölməyə baxış icazəniz yoxdur.', 'danger')
+        return redirect(url_for('index'))
     page = request.args.get('page', 1, type=int)
     report = get_entity_report(entity_type, entity_id, page=page, per_page=100)
     if not report:
