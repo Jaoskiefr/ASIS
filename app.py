@@ -27,6 +27,24 @@ if HAS_MIGRATION:
     except Exception as e:
         print(f"Migration error: {e}")
 
+# Mövcud bazalarda reporter rolunu avtomatik aktivləşdir
+try:
+    _role_conn = get_connection()
+    with _role_conn.cursor() as _role_cursor:
+        _role_cursor.execute("SHOW COLUMNS FROM users LIKE 'role'")
+        _role_col = _role_cursor.fetchone() or {}
+        _role_type = _role_col.get('Type', '')
+        if 'reporter' not in _role_type:
+            _role_cursor.execute("""
+                ALTER TABLE users
+                MODIFY COLUMN role ENUM('admin','user','supervisor','reporter')
+                NOT NULL DEFAULT 'user'
+            """)
+            _role_conn.commit()
+    _role_conn.close()
+except Exception as e:
+    print(f"Reporter role migration error: {e}")
+
 # --- SABİT SİYAHILAR ---
 EXPENSE_TYPES = [
     'Yanacaq',
